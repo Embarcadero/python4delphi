@@ -606,9 +606,10 @@ Type
   { Base class for exposing Records and Interfaces when Extended RTTI is available }
   TPyRttiObject = class (TPyObject)
   private
-     fAddr: Pointer;
-     fRttiType: TRttiStructuredType;
-     function GetValue: TValue; virtual; abstract;
+    fCopy: PValue;
+    fAddr: Pointer;
+    fRttiType: TRttiStructuredType;
+    function GetValue: TValue; virtual; abstract;
   protected
     // Exposed Methods
     function SetProps(args, keywords : PPyObject) : PPyObject; cdecl;
@@ -616,7 +617,9 @@ Type
   public
     PyDelphiWrapper : TPyDelphiWrapper;
     constructor Create( APythonType : TPythonType ); override;
+    destructor Destroy; override;
     procedure SetAddrAndType(Address: Pointer; Typ: TRttiStructuredType);
+    procedure KeepCopy(const aValue: TValue);
 
     function  GetAttrO( key: PPyObject) : PPyObject; override;
     function  SetAttrO( key, value: PPyObject) : Integer; override;
@@ -842,10 +845,12 @@ Type
     {$IFDEF EXTENDED_RTTI}
     //  Function that provides a Python object wrapping a record
     function WrapRecord(Address: Pointer; Typ: TRttiStructuredType): PPyObject;
+    function WrapRecordCopy(const IValue: TValue): PPyObject;
     //  Function that provides a Python object wrapping an interface
     //  Note the the interface must be compiled in {$M+} mode and have a guid
     //  Usage: WrapInterface(TValue.From(YourInterfaceReference))
     function WrapInterface(const IValue: TValue): PPyObject;
+    function WrapInterfaceCopy(const IValue: TValue): PPyObject;
     {$ENDIF}
     // properties
     property EventHandlers : TEventHandlers read fEventHandlerList;
@@ -2051,6 +2056,15 @@ begin
     PyDelphiWrapper := TPyDelphiWrapper(APythonType.Owner);
 end;
 
+destructor TPyRttiObject.Destroy;
+begin
+  if Assigned(fCopy) then begin
+    Dispose(fCopy);
+    fCopy := nil;
+  end;
+  inherited;
+end;
+
 function TPyRttiObject.Dir_Wrapper(args: PPyObject): PPyObject;
 var
   i : Integer;
@@ -2090,6 +2104,30 @@ begin
     with GetPythonEngine do
       PyErr_SetObject (PyExc_AttributeError^,
         PyUnicodeFromString(Format(rs_ErrAttrGet,[KeyName, ErrMsg])));
+end;
+
+procedure TPyRttiObject.KeepCopy(const aValue: TValue);
+var
+  Context: TRttiContext;
+  RttiType: TRttiStructuredType;
+  Addr : Pointer;
+begin
+  Context := TRttiContext.Create();
+  try
+    RttiType := Context.GetType(aValue.TypeInfo) as TRttiStructuredType;
+  finally
+    Context.Free;
+  end;
+  if Assigned(fCopy) then begin
+    Dispose(fCopy);
+    fCopy := nil;
+  end;
+  New(fCopy);
+  fCopy^ := aValue;
+  Addr := fCopy^.GetReferenceToRawData;
+  if RttiType.TypeKind = tkInterface then
+    Addr := PPointer(Addr)^;
+  SetAddrAndType(Addr, RttiType);
 end;
 
 class procedure TPyRttiObject.RegisterMethods(PythonType: TPythonType);
@@ -2158,7 +2196,10 @@ end;
 
 function TPyPascalRecord.GetValue: TValue;
 begin
-   TValue.Make(fAddr, RttiType.Handle, Result);
+  if Assigned(fCopy) then
+    Result := fCopy^
+  else
+    TValue.Make(fAddr, RttiType.Handle, Result);
 end;
 
 class procedure TPyPascalRecord.SetupType(PythonType: TPythonType);
@@ -2172,7 +2213,10 @@ end;
 
 function TPyPascalInterface.GetValue: TValue;
 begin
-   TValue.Make(@fAddr, RttiType.Handle, Result);
+  if Assigned(fCopy) then
+    Result := fCopy^
+  else
+    TValue.Make(@fAddr, RttiType.Handle, Result);
 end;
 
 class procedure TPyPascalInterface.SetupType(PythonType: TPythonType);
@@ -2994,9 +3038,14 @@ begin
     ret := meth.Invoke(Addr, Args);
     if ret.IsEmpty then
       Result := GetPythonEngine.ReturnNone
-    else if ret.Kind = tkClass then
-      Result := fDelphiWrapper.Wrap(ret.AsObject)
-    else begin
+    else case ret.Kind of
+      tkClass:
+        Result := fDelphiWrapper.Wrap(ret.AsObject);
+      tkInterface:
+        Result := fDelphiWrapper.WrapInterfaceCopy(ret);
+      tkRecord:
+        Result := fDelphiWrapper.WrapRecordCopy(ret);
+    else
       Result := SimpleValueToPython(ret, ErrMsg);
       if Result = nil then
         with PythonType.Engine do
@@ -3842,6 +3891,28 @@ begin
   end;
 end;
 
+function TPyDelphiWrapper.WrapRecordCopy(const IValue: TValue) : PPyObject;
+var
+  PythonType: TPythonType;
+begin
+  CheckEngine;
+  if IValue.IsEmpty then begin
+    Result := Engine.ReturnNone;
+    Exit;
+  end;
+  PythonType := GetHelperType('PascalRecordType');
+  if not Assigned(PythonType) or (IValue.Kind <> tkRecord)  then
+  begin
+    Result := Engine.ReturnNone;
+    Exit;
+  end;
+  Result := PythonType.CreateInstance;
+  with PythonToDelphi(Result) as TPyPascalRecord do begin
+    KeepCopy(IValue);
+    PyDelphiWrapper := Self;
+  end;
+end;
+
 function TPyDelphiWrapper.WrapInterface(const IValue: TValue): PPyObject;
 var
   PythonType: TPythonType;
@@ -3867,6 +3938,31 @@ begin
     PyDelphiWrapper := Self;
   end;
 end;
+
+function TPyDelphiWrapper.WrapInterfaceCopy(const IValue: TValue): PPyObject;
+var
+  PythonType: TPythonType;
+  Typ: TRttiStructuredType;
+begin
+  CheckEngine;
+  if IValue.IsEmpty then begin
+    Result := Engine.ReturnNone;
+    Exit;
+  end;
+  PythonType := GetHelperType('PascalInterfaceType');
+  if not Assigned(PythonType) or (IValue.Kind <> tkInterface) then
+  begin
+    Result := Engine.ReturnNone;
+    Exit;
+  end;
+  Result := PythonType.CreateInstance;
+  Typ := TRttiContext.Create.GetType(IValue.TypeInfo) as TRttiStructuredType;
+  with PythonToDelphi(Result) as TPyPascalInterface do begin
+    KeepCopy(IValue);
+    PyDelphiWrapper := Self;
+  end;
+end;
+
 
 // To keep the RTTI Pool alive and avoid continuously creating/destroying it
 // See also https://stackoverflow.com/questions/27368556/trtticontext-multi-thread-issue
