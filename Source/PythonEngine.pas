@@ -9121,7 +9121,7 @@ begin
   InstallPath := '';
   AllUserInstall := False;
   MajorVersion := StrToInt(PythonVersion[1]);
-  MinorVersion := StrToInt(PythonVersion[3]);
+  MinorVersion := StrToInt(Copy(PythonVersion, 3, High(Integer)));
   VersionSuffix := '';
 {$IFDEF CPUX86}
   if (MajorVersion > 3) or ((MajorVersion = 3)  and (MinorVersion >= 5)) then
