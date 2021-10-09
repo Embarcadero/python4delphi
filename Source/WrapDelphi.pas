@@ -3942,7 +3942,6 @@ end;
 function TPyDelphiWrapper.WrapInterfaceCopy(const IValue: TValue): PPyObject;
 var
   PythonType: TPythonType;
-  Typ: TRttiStructuredType;
 begin
   CheckEngine;
   if IValue.IsEmpty then begin
@@ -3956,7 +3955,6 @@ begin
     Exit;
   end;
   Result := PythonType.CreateInstance;
-  Typ := TRttiContext.Create.GetType(IValue.TypeInfo) as TRttiStructuredType;
   with PythonToDelphi(Result) as TPyPascalInterface do begin
     KeepCopy(IValue);
     PyDelphiWrapper := Self;
