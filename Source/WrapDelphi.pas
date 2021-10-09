@@ -1004,7 +1004,7 @@ begin
       tkArray, tkDynArray:
         Result := DynArrayToPython(Value);
       tkClass, tkMethod,
-      tkRecord, tkInterface,
+     tkRecord, tkInterface, {$IFDEF MANAGED_RECORD} tkMRecord,{$ENDIF}
       tkClassRef, tkPointer, tkProcedure:
         ErrMsg := rs_ErrValueToPython;
     else
@@ -1070,7 +1070,7 @@ begin
           Result := True;
         end;
       tkClass, tkMethod, tkArray,
-      tkRecord, tkInterface,
+      tkRecord, tkInterface,{$IFDEF MANAGED_RECORD} tkMRecord,{$ENDIF}
       tkClassRef, tkPointer, tkProcedure:
         ErrMsg := rs_ErrPythonToValue;
     else
@@ -1928,7 +1928,7 @@ begin
               Result := PyDelphiWrapper.Wrap(Field.GetValue(ParentAddr).AsObject);  // Returns None if Field is nil
             tkInterface:
               Result := PyDelphiWrapper.WrapInterface(Field.GetValue(ParentAddr));
-            tkRecord:
+            tkRecord{$IFDEF MANAGED_RECORD},tkMRecord{$ENDIF}:
               if Field.FieldType is TRttiStructuredType then
                 //Result := PyDelphiWrapper.WrapRecord(Pointer(PPByte(ParentAddr)^ + Field.Offset),  TRttiStructuredType(Field.FieldType));
                 Result := PyDelphiWrapper.WrapRecord(PByte(ParentAddr) + Field.Offset,  TRttiStructuredType(Field.FieldType));
@@ -1981,7 +1981,7 @@ begin
             Prop.SetValue(ParentAddr, ValueOut);
             Result := True;
           end;
-        tkRecord:
+        tkRecord{$IFDEF MANAGED_RECORD},tkMRecord{$ENDIF}:
           if ValidateRecordProperty(Value, Prop.PropertyType.Handle, ValueOut, ErrMsg) then begin
             Prop.SetValue(ParentAddr, ValueOut);
             Result := True;
@@ -2026,7 +2026,7 @@ begin
               Field.SetValue(ParentAddr, ValueOut);
               Result := True;
             end;
-          tkRecord:
+          tkRecord{$IFDEF MANAGED_RECORD},tkMRecord{$ENDIF}:
             if ValidateRecordProperty(Value, Field.FieldType.Handle, ValueOut, ErrMsg) then begin
               Field.SetValue(ParentAddr, ValueOut);
               Result := True;
@@ -2937,7 +2937,7 @@ function TPyDelphiMethodObject.Call(ob1, ob2: PPyObject): PPyObject;
             if (Param.ParamType = nil) or
               (Param.Flags * [TParamFlag.pfVar, TParamFlag.pfOut] <> []) then
             begin
-              if Assigned(Param.ParamType) and (Param.ParamType.TypeKind = tkRecord) then
+              if Assigned(Param.ParamType) and (Param.ParamType.TypeKind in [tkRecord{$IFDEF MANAGED_RECORD},tkMRecord{$ENDIF}]) then
                 //ok
               else begin
                 Result := nil;
@@ -2979,7 +2979,7 @@ function TPyDelphiMethodObject.Call(ob1, ob2: PPyObject): PPyObject;
                 Break
               end
             end
-            else if Param.ParamType.TypeKind = tkRecord then
+            else if Param.ParamType.TypeKind in [tkRecord{$IFDEF MANAGED_RECORD},tkMRecord{$ENDIF}] then
             begin
               if not ValidateRecordProperty(PyValue, Param.ParamType.Handle, Args[Index], ErrMsg)
               then begin
@@ -3063,7 +3063,7 @@ begin
         Result := fDelphiWrapper.Wrap(ret.AsObject);
       tkInterface:
         Result := fDelphiWrapper.WrapInterfaceCopy(ret);
-      tkRecord:
+      tkRecord{$IFDEF MANAGED_RECORD},tkMRecord{$ENDIF}:
         Result := fDelphiWrapper.WrapRecordCopy(ret);
     else
       Result := SimpleValueToPython(ret, ErrMsg);
@@ -3921,7 +3921,7 @@ begin
     Exit;
   end;
   PythonType := GetHelperType('PascalRecordType');
-  if not Assigned(PythonType) or (IValue.Kind <> tkRecord)  then
+  if not Assigned(PythonType) or not (IValue.Kind in [tkRecord{$IFDEF MANAGED_RECORD},tkMRecord{$ENDIF}])  then
   begin
     Result := Engine.ReturnNone;
     Exit;
