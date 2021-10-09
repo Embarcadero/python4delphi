@@ -1004,7 +1004,7 @@ begin
       tkArray, tkDynArray:
         Result := DynArrayToPython(Value);
       tkClass, tkMethod,
-     tkRecord, tkInterface, {$IFDEF MANAGED_RECORD} tkMRecord,{$ENDIF}
+      tkRecord, tkInterface, {$IFDEF MANAGED_RECORD} tkMRecord,{$ENDIF}
       tkClassRef, tkPointer, tkProcedure:
         ErrMsg := rs_ErrValueToPython;
     else
@@ -1905,6 +1905,9 @@ begin
             Result := PyDelphiWrapper.Wrap(Prop.GetValue(ParentAddr).AsObject);
           tkInterface:
             Result := PyDelphiWrapper.WrapInterface(Prop.GetValue(ParentAddr));
+          tkRecord{$IFDEF MANAGED_RECORD},tkMRecord{$ENDIF}:
+            // Must be a copy, property getters are not allowed to leak access to underlying storage
+            Result := PyDelphiWrapper.WrapRecordCopy(Prop.GetValue(ParentAddr));
           tkMethod:
             if (ParentType is TRttiInstanceType) and (Prop is TRttiInstanceProperty) then
               Result := PyDelphiWrapper.fEventHandlerList.GetCallable(TObject(ParentAddr),
@@ -1930,7 +1933,13 @@ begin
               Result := PyDelphiWrapper.WrapInterface(Field.GetValue(ParentAddr));
             tkRecord{$IFDEF MANAGED_RECORD},tkMRecord{$ENDIF}:
               if Field.FieldType is TRttiStructuredType then
-                //Result := PyDelphiWrapper.WrapRecord(Pointer(PPByte(ParentAddr)^ + Field.Offset),  TRttiStructuredType(Field.FieldType));
+                //Potentially dangerous as the returned value, which is a pointer into the object,
+                //could be stored on the python side, then the object freed, and the stored pointer later
+                //used to access no longer allocated memory
+                //But I can't see any good alternative if Python should be able to write directly into
+                //fields of a record that's part of an object.
+                //Maybe a relationship should be established between this wrapper and the wrapper of the parent object
+                //such that a free notification on the parent object will disable access through this wrapper?
                 Result := PyDelphiWrapper.WrapRecord(PByte(ParentAddr) + Field.Offset,  TRttiStructuredType(Field.FieldType));
           else
             Result := SimpleValueToPython(Field.GetValue(ParentAddr), ErrMsg)
