@@ -849,6 +849,10 @@ Type
     //  Function that provides a Python object wrapping an interface
     //  Note the the interface must be compiled in {$M+} mode and have a guid
     //  Usage: WrapInterface(TValue.From(YourInterfaceReference))
+    //  Warning: WrapInterface represents a weak (uncounted) reference!
+    //           Use WrapInterfaceCopy to retrieve a normal counted reference
+    //           that will keep the interface alive as long as python has a
+    //           reference to it.
     function WrapInterface(const IValue: TValue): PPyObject;
     function WrapInterfaceCopy(const IValue: TValue): PPyObject;
     {$ENDIF}
@@ -1904,7 +1908,9 @@ begin
           tkClass:
             Result := PyDelphiWrapper.Wrap(Prop.GetValue(ParentAddr).AsObject);
           tkInterface:
-            Result := PyDelphiWrapper.WrapInterface(Prop.GetValue(ParentAddr));
+            // Must be a copy, otherwise reference counting fails and the returned
+            // interface might be freed while python is holding a reference to it
+            Result := PyDelphiWrapper.WrapInterfaceCopy(Prop.GetValue(ParentAddr));
           tkRecord{$IFDEF MANAGED_RECORD},tkMRecord{$ENDIF}:
             // Must be a copy, property getters are not allowed to leak access to underlying storage
             Result := PyDelphiWrapper.WrapRecordCopy(Prop.GetValue(ParentAddr));
@@ -1930,7 +1936,9 @@ begin
             tkClass:
               Result := PyDelphiWrapper.Wrap(Field.GetValue(ParentAddr).AsObject);  // Returns None if Field is nil
             tkInterface:
-              Result := PyDelphiWrapper.WrapInterface(Field.GetValue(ParentAddr));
+              // Must be a copy, otherwise reference counting fails and the returned
+              // interface might be freed while python is holding a reference to it
+              Result := PyDelphiWrapper.WrapInterfaceCopy(Field.GetValue(ParentAddr));
             tkRecord{$IFDEF MANAGED_RECORD},tkMRecord{$ENDIF}:
               if Field.FieldType is TRttiStructuredType then
                 //Potentially dangerous as the returned value, which is a pointer into the object,
