@@ -2937,9 +2937,13 @@ function TPyDelphiMethodObject.Call(ob1, ob2: PPyObject): PPyObject;
             if (Param.ParamType = nil) or
               (Param.Flags * [TParamFlag.pfVar, TParamFlag.pfOut] <> []) then
             begin
-              Result := nil;
-              SearchContinue := True;
-              Break;
+              if Assigned(Param.ParamType) and (Param.ParamType.TypeKind = tkRecord) then
+                //ok
+              else begin
+                Result := nil;
+                SearchContinue := True;
+                Break;
+              end
             end;
 
             PyValue := PythonType.Engine.PyTuple_GetItem(PyArgs, Index);
@@ -2963,6 +2967,22 @@ function TPyDelphiMethodObject.Call(ob1, ob2: PPyObject): PPyObject;
               if ValidateClassRef(PyValue, Param.ParamType.Handle, ClassRef, ErrMsg) then
                 Args[Index] := ClassRef
               else begin
+                Result := nil;
+                Break
+              end
+            end
+            else if Param.ParamType.TypeKind = tkInterface then
+            begin
+              if not ValidateInterfaceProperty(PyValue, Param.ParamType as TRttiInterfaceType, Args[Index], ErrMsg)
+              then begin
+                Result := nil;
+                Break
+              end
+            end
+            else if Param.ParamType.TypeKind = tkRecord then
+            begin
+              if not ValidateRecordProperty(PyValue, Param.ParamType.Handle, Args[Index], ErrMsg)
+              then begin
                 Result := nil;
                 Break
               end
