@@ -341,6 +341,10 @@ uses
 Type
   TObjectOwnership = (soReference, soOwned);
 
+const
+  ObjectOwnershipFromBool: array[Boolean] of TObjectOwnership = (soReference, soOwned);
+
+type
   // forward declaration
   TPyDelphiWrapper = class;
 
@@ -577,6 +581,48 @@ Type
   end;
   TPyDelphiObjectClass = class of TPyDelphiObject;
 
+  {
+    PyObject wrapping TClass
+    Do not create  TPyDelphi or its subclasses directly - Instead use
+    PyDelphiWrapper.Wrap
+  }
+  TPyDelphiClass = class (TPyObject)
+  private
+    fDelphiClass: TClass;
+    procedure SetDelphiClass(const Value: TClass);
+  protected
+    class function GetTypeName : string; virtual;
+
+    function CheckBound : Boolean;
+    // Exposed Methods
+    function Dir_Wrapper(args: PPyObject): PPyObject; cdecl;
+    // Exposed Getters
+    function Get_ClassName(Acontext : Pointer) : PPyObject; cdecl;
+    function Get_Bound(Acontext : Pointer) : PPyObject; cdecl;
+  public
+    PyDelphiWrapper : TPyDelphiWrapper;
+
+    constructor Create( APythonType : TPythonType ); override;
+    destructor Destroy; override;
+
+    function  GetAttrO( key: PPyObject) : PPyObject; override;
+    function  SetAttrO( key, value: PPyObject) : Integer; override;
+    // Classs are equal when they refer to the same DelphiClass
+    function  Compare( obj: PPyObject) : Integer; override;
+    function  Repr : PPyObject; override;
+
+    class function  DefinedDelphiClass : TClass; virtual;
+    class procedure RegisterMethods( PythonType : TPythonType ); override;
+    class procedure RegisterGetSets( PythonType : TPythonType ); override;
+    class procedure SetupType( PythonType : TPythonType ); override;
+
+    // helper methods
+    function Wrap(AClass : TClass) : PPyObject;
+    // Properties
+    property DelphiClass: TClass read fDelphiClass write SetDelphiClass;
+  end;
+  TPyDelphiClassClass = class of TPyDelphiClass;
+
   { This class will simply hold a Python object in its Value property.
     This is required for Delphi var parameters because Python  won't let you
     replace a parameter value with another one, so, we will provide a container
@@ -794,6 +840,7 @@ Type
   private
     // Stores Delphi class registration information
     fClassRegister : TObjectList;
+    fClassRefRegister : TObjectList;
     // Stores registration for Helper Types (do not correspond to Delphi classes)
     fHelperClassRegister : TStringList;
     // Stores Created Event Handlers
@@ -832,13 +879,17 @@ Type
     procedure Finalize; override;
     procedure DefineVar(const AName : string; const AValue : Variant); overload;
     procedure DefineVar(const AName : string; AValue : TObject); overload;
+    procedure DefineVar(const AName : string; AValue : TClass); overload;
     procedure RegisterDelphiWrapper(AWrapperClass : TPyDelphiObjectClass);
+    procedure RegisterDelphiClassWrapper(AWrapperClass : TPyDelphiClassClass);
     function  RegisterHelperType(APyObjectClass : TPyObjectClass) : TPythonType;
     function  RegisterFunction(AFuncName : PAnsiChar; AFunc : PyCFunction; ADocString : PAnsiChar ): PPyMethodDef; overload;
     function  RegisterFunction(AFuncName : PAnsiChar; AFunc : TDelphiMethod; ADocString : PAnsiChar ): PPyMethodDef; overload;
     function  GetHelperType(const TypeName : string) : TPythonType;
     //  Function that provides a Python object wrapping an object
-    function Wrap(AObj : TObject; AOwnership: TObjectOwnership = soReference) : PPyObject;
+    function Wrap(AObj : TObject; AOwnership: TObjectOwnership = soReference) : PPyObject; overload;
+    function Wrap(AObj : TObject; aFromConstructor: Boolean) : PPyObject; overload;
+    function Wrap(ACls : TClass) : PPyObject; overload;
     {$IFDEF EXTENDED_RTTI}
     //  Function that provides a Python object wrapping a record
     function WrapRecord(Address: Pointer; Typ: TRttiStructuredType): PPyObject;
@@ -1203,6 +1254,47 @@ begin
     ErrMsg := rs_ExpectedObject;
 end;
 
+function ValidateClassRefProperty(PyValue: PPyObject; TypeInfo: PTypeInfo;
+  out Cls: TClass; out ErrMsg: string): Boolean;
+var
+  PyObject : TPyObject;
+  Obj: TObject;
+begin
+  Cls := nil;
+  if PyValue = GetPythonEngine.Py_None then begin
+     Result := True;
+     Exit;
+  end;
+  Result := False;
+  if IsDelphiObject(PyValue) then
+  begin
+    PyObject := PythonToDelphi(PyValue);
+
+    Assert(TypeInfo.Kind = tkClassRef);
+    TypeInfo := GetTypeData(TypeInfo).InstanceType^;
+
+    if PyObject is TPyDelphiObject then begin
+      Obj := TPyDelphiObject(PyObject).DelphiObject;
+      if Assigned(Obj) then
+        Cls := Obj.ClassType;
+    end else if PyObject is TPyDelphiClass then
+      Cls := TPyDelphiClass(PyObject).DelphiClass
+    else
+      ErrMsg := rs_ExpectedClass;
+
+    if Assigned(Cls) then
+      if Cls.InheritsFrom(GetTypeData(TypeInfo).ClassType) then
+        Result := True
+      else begin
+        Cls := nil;
+        ErrMsg := rs_IncompatibleClasses;
+      end;
+  end
+  else
+    ErrMsg := rs_ExpectedClass;
+end;
+
+
 function CheckIndex(AIndex, ACount : Integer; const AIndexName : string = 'Index') : Boolean;
 begin
   if (AIndex < 0) or (AIndex >= ACount) then
@@ -1494,6 +1586,7 @@ Type
     ParentRtti: TRttiStructuredType;
     fDelphiWrapper : TPyDelphiWrapper;
     MethName: string;
+    ParentAddressIsClass: Boolean;
     {$ELSE}
     DelphiObject: TObject;
     MethodInfo : TMethodInfoHeader;
@@ -1843,7 +1936,7 @@ begin
 end;
 
 {$IFDEF EXTENDED_RTTI}
-procedure Rtti_Dir(SL: TStringList; RttiType: TRttiType);
+procedure Rtti_Dir(SL: TStringList; RttiType: TRttiType; aOnlyClass: Boolean = False);
 var
   RttiMethod: TRttiMethod;
   RttiProperty: TRttiProperty;
@@ -1851,18 +1944,21 @@ var
 begin
   for RttiMethod in RttiType.GetMethods do
     if Ord(RttiMethod.Visibility) > Ord(mvProtected) then
-      SL.Add(RttiMethod.Name);
-  for RttiProperty in RttiType.GetProperties do
-    if Ord(RttiProperty.Visibility) > Ord(mvProtected) then
-      SL.Add(RttiProperty.Name);
-  for RttiField in RttiType.GetFields do
-    if Ord(RttiField.Visibility) > Ord(mvProtected) then
-      SL.Add(RttiField.Name);
+      if not aOnlyClass or (RttiMethod.IsConstructor or RttiMethod.IsClassMethod or RttiMethod.IsStatic) then
+        SL.Add(RttiMethod.Name);
+  if not aOnlyClass then begin
+    for RttiProperty in RttiType.GetProperties do
+      if Ord(RttiProperty.Visibility) > Ord(mvProtected) then
+        SL.Add(RttiProperty.Name);
+    for RttiField in RttiType.GetFields do
+      if Ord(RttiField.Visibility) > Ord(mvProtected) then
+        SL.Add(RttiField.Name);
+  end;
 end;
 
 function GetRttiAttr(ParentAddr: Pointer; ParentType: TRttiStructuredType;
   const AttrName: string; PyDelphiWrapper: TPyDelphiWrapper;
-  out ErrMsg: string): PPyObject;
+  out ErrMsg: string; aClassOnly: Boolean = False): PPyObject;
 var
   Prop: TRttiProperty;
   Meth: TRttiMethod;
@@ -1872,6 +1968,9 @@ begin
 
   try
     Meth := ParentType.GetMethod(AttrName);
+    if aClassOnly and Assigned(Meth) then
+      if not (Meth.IsConstructor or Meth.IsClassMethod or Meth.IsStatic) then
+        Meth := nil;
     if Meth <> nil then
     begin
       Result := PyDelphiWrapper.DelphiMethodType.CreateInstance;
@@ -1881,9 +1980,10 @@ begin
         MethName := Meth.Name;
         ParentRtti := ParentType;
         ParentAddress := ParentAddr;
+        ParentAddressIsClass := aClassOnly;
       end;
     end
-    else
+    else if not aClassOnly then
     begin
       Prop := ParentType.GetProperty(AttrName);
       if Prop <> nil then
@@ -1898,6 +1998,8 @@ begin
         case Prop.PropertyType.TypeKind of
           tkClass:
             Result := PyDelphiWrapper.Wrap(Prop.GetValue(ParentAddr).AsObject);
+          tkClassRef:
+            Result := PyDelphiWrapper.Wrap(Prop.GetValue(ParentAddr).AsClass);
           tkInterface:
             Result := PyDelphiWrapper.WrapInterface(Prop.GetValue(ParentAddr));
           tkMethod:
@@ -1921,6 +2023,8 @@ begin
           case Field.FieldType.TypeKind of
             tkClass:
               Result := PyDelphiWrapper.Wrap(Field.GetValue(ParentAddr).AsObject);  // Returns None if Field is nil
+            tkClassRef:
+              Result := PyDelphiWrapper.Wrap(Field.GetValue(ParentAddr).AsClass);  // Returns None if Field is nil
             tkInterface:
               Result := PyDelphiWrapper.WrapInterface(Field.GetValue(ParentAddr));
             tkRecord:
@@ -1951,6 +2055,7 @@ var
   Field: TRttiField;
   V: TValue;
   Obj: TObject;
+  Cls: TClass;
   ValueOut: TValue;
 begin
   Result := False;
@@ -1969,6 +2074,11 @@ begin
         tkClass:
           if ValidateClassProperty(Value, Prop.PropertyType.Handle, Obj, ErrMsg) then begin
             Prop.SetValue(ParentAddr, Obj);
+            Result := True;
+          end;
+        tkClassRef:
+          if ValidateClassRefProperty(Value, Prop.PropertyType.Handle, Cls, ErrMsg) then begin
+            Prop.SetValue(ParentAddr, Cls);
             Result := True;
           end;
         tkInterface:
@@ -2014,6 +2124,11 @@ begin
           tkClass:
             if ValidateClassProperty(value, Field.FieldType.Handle, Obj, ErrMsg) then begin
               Field.SetValue(ParentAddr, Obj);
+              Result := True;
+            end;
+          tkClassRef:
+            if ValidateClassRefProperty(value, Field.FieldType.Handle, Cls, ErrMsg) then begin
+              Field.SetValue(ParentAddr, Cls);
               Result := True;
             end;
           tkInterface:
@@ -2396,6 +2511,7 @@ var
   AClass: TClass;
   KlassName: string;
   IsSubClass: Boolean;
+  PyObject: TPyObject;
 begin
   // We adjust the transmitted self argument
   Adjust(@Self);
@@ -2403,17 +2519,33 @@ begin
   begin
     if PyArg_ParseTuple( args, 'O:InheritsFrom',@_obj ) <> 0 then begin
       if CheckBound then begin
-        KlassName := PyObjectAsString(_obj);
-        AClass := DelphiObject.ClassType;
-        repeat
-          IsSubClass := SameText(AClass.ClassName, KlassName);
-          if IsSubClass then Break;
-          AClass := AClass.ClassParent;
-        until AClass = nil;
+
+        if IsDelphiObject(_obj) then begin
+          AClass := nil;
+          PyObject := PythonToDelphi(_obj);
+          if PyObject is TPyDelphiObject then begin
+            with TPyDelphiObject(PyObject) do
+              if Assigned(DelphiObject) then
+                AClass := DelphiObject.ClassType
+          end else if PyObject is TPyDelphiClass then
+            AClass := TPyDelphiClass(PyObject).DelphiClass;
+
+          IsSubClass := Assigned(AClass) and DelphiObject.InheritsFrom(AClass);
+        end else begin
+          KlassName := PyObjectAsString(_obj);
+          AClass := DelphiObject.ClassType;
+          repeat
+            IsSubClass := SameText(AClass.ClassName, KlassName);
+            if IsSubClass then Break;
+            AClass := AClass.ClassParent;
+          until AClass = nil;
+        end;
+
         if IsSubClass then
           Result := PPyObject(Py_True)
         else
           Result := PPyObject(Py_False);
+
         Py_INCREF( Result );
       end else
         Result := nil;
@@ -2823,6 +2955,250 @@ begin
   Result := PyDelphiWrapper.Wrap(AObject, AOwnership);
 end;
 
+{ TPyDelphiClass }
+
+function TPyDelphiClass.CheckBound: Boolean;
+begin
+  Result := Assigned(DelphiClass);
+  if not Result then
+    with GetPythonEngine do
+      PyErr_SetObject(PyExc_AttributeError^,
+        PyUnicodeFromString(Format(rs_ErrCheckBound, [ClassName])));
+end;
+
+function TPyDelphiClass.Compare(obj: PPyObject): Integer;
+Var
+  PyObject : TPyObject;
+begin
+  if IsDelphiObject(obj) then begin
+    PyObject := PythonToDelphi(obj);
+    if PyObject is TPyDelphiClass then
+      Result := Sign(NativeInt(TPyDelphiClass(PyObject).DelphiClass) - NativeInt(DelphiClass))
+    else
+      Result := -1;  // not equal
+  end else
+    Result := -1;  // not equal
+end;
+
+constructor TPyDelphiClass.Create(APythonType: TPythonType);
+begin
+  inherited;
+  if Assigned(APythonType) and (APythonType.Owner is TPyDelphiWrapper) then
+    PyDelphiWrapper := TPyDelphiWrapper(APythonType.Owner);
+end;
+
+class function TPyDelphiClass.DefinedDelphiClass: TClass;
+begin
+  Result := TObject;
+end;
+
+destructor TPyDelphiClass.Destroy;
+begin
+  DelphiClass := nil;
+  inherited;
+end;
+
+function TPyDelphiClass.Dir_Wrapper(args: PPyObject): PPyObject;
+var
+  i : Integer;
+  SL : TStringList;
+{$IFDEF EXTENDED_RTTI}
+  Context: TRttiContext;
+  RttiType: TRTTIType;
+{$ENDIF}
+begin
+  Adjust(@Self);
+  SL := TStringList.Create;
+  SL.Sorted := True;
+  SL.Duplicates := dupIgnore;
+  try
+    // Add methods
+    for i := 0 to PythonType.MethodCount - 1 do
+      SL.Add(string(AnsiString(PythonType.Methods[i].ml_name)));
+    for i := 0 to PythonType.GetSetCount - 1 do
+      SL.Add(string(AnsiString(PythonType.GetSet[i].name)));
+{$IFDEF EXTENDED_RTTI}
+    Context := TRttiContext.Create();
+    try
+      RttiType := Context.GetType(DelphiClass);
+      Rtti_Dir(SL, RttiType, True);
+    finally
+      Context.Free();
+    end;
+{$ENDIF}
+    Result := GetPythonEngine.StringsToPyList(SL);
+  finally
+    SL.Free;
+  end;
+end;
+
+function TPyDelphiClass.GetAttrO(key: PPyObject): PPyObject;
+(*
+    First look whether the attribute has ben wrapped (RegisterGetSet, RegisterMethod).
+    This is done by calling the inherited GetAttrO.  If this fails then
+      -  Use Rtti to locate the property in DELPHIXE_OR_HIGHER (EXTENDED_RTTI)
+*)
+
+var
+  KeyName: string;
+  ErrMsg : string;
+  {$IFDEF EXTENDED_RTTI}
+  Context: TRttiContext;
+  RttiType: TRttiStructuredType;
+  {$ENDIF}
+begin
+  Result := inherited GetAttrO(key);
+  if GetPythonEngine.PyErr_Occurred = nil then Exit;  // We found what we wanted
+
+  if Assigned(DelphiClass) and GetPythonEngine.PyUnicode_Check(Key) then
+    KeyName := GetPythonEngine.PyUnicodeAsString(Key)
+  else
+    Exit;
+
+  GetPythonEngine.PyErr_Clear;
+{$IFDEF EXTENDED_RTTI}
+  if Assigned(DelphiClass) then begin
+    Context := TRttiContext.Create();
+    try
+      RttiType := Context.GetType(DelphiClass) as TRttiStructuredType;
+      if Assigned(RttiType) then
+        Result := GetRttiAttr(DelphiClass, RttiType, KeyName, PyDelphiWrapper, ErrMsg, True);
+    finally
+      Context.Free;
+    end;
+  end;
+{$ENDIF}
+  if not Assigned(Result) then
+    with GetPythonEngine do
+      PyErr_SetObject (PyExc_AttributeError^,
+        PyUnicodeFromString(Format(rs_ErrAttrGet,[KeyName, ErrMsg])));
+end;
+
+class function TPyDelphiClass.GetTypeName: string;
+begin
+  Result := 'ClassOf' + Copy(DefinedDelphiClass.ClassName, 2, MaxInt);
+end;
+
+function TPyDelphiClass.Get_Bound(Acontext: Pointer): PPyObject;
+begin
+  Adjust(@Self);
+  Result := GetPythonEngine.VariantAsPyObject(Assigned(DelphiClass));
+end;
+
+function TPyDelphiClass.Get_ClassName(Acontext: Pointer): PPyObject;
+begin
+  Adjust(@Self);
+  if CheckBound then
+    Result := GetPythonEngine.PyUnicodeFromString(DelphiClass.ClassName)
+  else
+    Result := nil;
+end;
+
+class procedure TPyDelphiClass.RegisterGetSets(PythonType: TPythonType);
+begin
+  inherited;
+  // then register TClass + custom getters/setters.
+  with PythonType do
+    begin
+      AddGetSet('ClassName', @TPyDelphiClass.Get_ClassName, nil,
+        'Returns the TClass.ClassName', nil);
+      AddGetSet('__bound__', @TPyDelphiClass.Get_Bound, nil,
+        'Returns True if the wrapper is still bound to the Delphi class.', nil);
+    end;
+end;
+
+class procedure TPyDelphiClass.RegisterMethods(PythonType: TPythonType);
+begin
+  inherited;
+  PythonType.AddMethod('__dir__', @TPyDelphiClass.Dir_Wrapper,
+    'Returns the list of all methods, fields and properties of this instance.');
+end;
+
+function TPyDelphiClass.Repr: PPyObject;
+begin
+  with GetPythonEngine do
+    if Assigned(DelphiClass) then
+      Result := PyUnicodeFromString( Format('<Delphi class of type %s at %x>',
+           [DelphiClass.ClassName, NativeInt(Self)]) )
+    else
+      Result := PyUnicodeFromString( Format('<Unbound Delphi class wrapper of type %s at %x>',
+           [DefinedDelphiClass.ClassName, NativeInt(Self)]) );
+end;
+
+function TPyDelphiClass.SetAttrO(key, value: PPyObject): Integer;
+(*
+    First look whether the attribute has ben wrapped (RegisterGetSet, RegisterMethod).
+    This is done by calling the inherited SetAttrO.  If this fails then
+      -  Use Rtti to locate the property in DELPHIXE_OR_HIGHER (EXTENDED_RTTI)
+*)
+
+var
+  {$IFDEF EXTENDED_RTTI}
+  //Context: TRttiContext;
+  //RttiType: TRttiStructuredType;
+  {$ENDIF}
+  KeyName: string;
+  ErrMsg: string;
+begin
+  Result := -1;
+  if Assigned(DelphiClass) and GetPythonEngine.PyUnicode_Check(Key) then
+    KeyName := GetPythonEngine.PyUnicodeAsString(Key)
+  else begin
+    Exit;
+  end;
+
+  // Only call the inherited method if the attribute exists
+  if GetPythonEngine.PyObject_HasAttrString(GetSelf, PAnsiChar(key)) = 1 then
+    Result := inherited SetAttrO(key, value);
+  if Result = 0 then Exit;
+
+  GetPythonEngine.PyErr_Clear;
+  {$IFDEF EXTENDED_RTTI}
+  { class properties and var are not accessible through RTTI
+  Context := TRttiContext.Create();
+  try
+    RttiType := Context.GetType(DelphiClass) as TRttiStructuredType;
+    if SetRttiAttr(DelphiObject, RttiType, KeyName, Value, PyDelphiWrapper, ErrMsg) then
+      Result := 0;
+  finally
+    Context.Free;
+  end;
+  }
+  {$ENDIF}
+  //  Subclasses have a __dict__ and can set extra fields
+  if Result <> 0 then
+    Result := inherited SetAttrO(key, value);
+  if Result <> 0 then
+    with GetPythonEngine do
+      PyErr_SetObject(PyExc_AttributeError^, PyUnicodeFromString(
+        Format(rs_ErrAttrSetr, [KeyName, ErrMsg])));
+end;
+
+procedure TPyDelphiClass.SetDelphiClass(const Value: TClass);
+begin
+  if fDelphiClass <> Value then
+  begin
+    if Assigned(Value) then
+      Assert(Value.InheritsFrom(DefinedDelphiClass));
+    fDelphiClass := Value;
+  end;
+end;
+
+class procedure TPyDelphiClass.SetupType(PythonType: TPythonType);
+begin
+  inherited;
+  PythonType.TypeName := AnsiString(GetTypeName);
+  PythonType.Name := string(PythonType.TypeName) + TPythonType.TYPE_COMP_NAME_SUFFIX;
+  PythonType.GenerateCreateFunction := False;
+  PythonType.DocString.Text := 'Wrapper for Delphi Class of ' + DefinedDelphiClass.ClassName;
+  PythonType.Services.Basic := [bsGetAttrO, bsSetAttrO, bsRepr, bsStr, bsRichCompare];
+end;
+
+function TPyDelphiClass.Wrap(AClass: TClass): PPyObject;
+begin
+  Result := PyDelphiWrapper.Wrap(AClass);
+end;
+
 {$IFNDEF FPC}
 { TPyDelphiMethodObject }
 
@@ -2914,11 +3290,13 @@ function TPyDelphiMethodObject.Call(ob1, ob2: PPyObject): PPyObject;
                 Break
               end
             end
-            else if (Param.ParamType.TypeKind = tkClassRef) then
+            else if Param.ParamType.TypeKind = tkClassRef then
             begin
-              if ValidateClassRef(PyValue, Param.ParamType.Handle, ClassRef, ErrMsg) then
+              if ValidateClassRef(PyValue, Param.ParamType.Handle, ClassRef, ErrMsg) or
+                  ValidateClassRefProperty(PyValue, Param.ParamType.Handle, ClassRef, ErrMsg) then begin
+                ErrMsg := '';
                 Args[Index] := ClassRef
-              else begin
+              end else begin
                 Result := nil;
                 Break
               end
@@ -2983,10 +3361,16 @@ begin
 
   try
     if ParentRtti is TRttiInstanceType then
-      if meth.IsClassMethod then
-        Addr := TValue.From(TObject(ParentAddress).ClassType)
-      else
-        Addr := TValue.From(TObject(ParentAddress))
+      if meth.IsClassMethod then begin
+        if ParentAddressIsClass then
+          Addr := TValue.From(TClass(ParentAddress))
+        else
+          Addr := TValue.From(TObject(ParentAddress).ClassType)
+      end else
+        if ParentAddressIsClass then
+          Addr := TValue.From(TClass(ParentAddress))
+        else
+          Addr := TValue.From(TObject(ParentAddress))
     else if ParentRtti is TRttiInterfaceType then
        TValue.Make(@ParentAddress, ParentRtti.Handle, Addr)
     else
@@ -2994,9 +3378,12 @@ begin
     ret := meth.Invoke(Addr, Args);
     if ret.IsEmpty then
       Result := GetPythonEngine.ReturnNone
-    else if ret.Kind = tkClass then
-      Result := fDelphiWrapper.Wrap(ret.AsObject)
-    else begin
+    else case ret.Kind of
+      tkClass:
+        Result := fDelphiWrapper.Wrap(ret.AsObject, meth.IsConstructor);
+      tkClassRef:
+        Result := fDelphiWrapper.Wrap(ret.AsClass);
+    else
       Result := SimpleValueToPython(ret, ErrMsg);
       if Result = nil then
         with PythonType.Engine do
@@ -3460,6 +3847,7 @@ constructor TPyDelphiWrapper.Create(AOwner: TComponent);
 begin
   inherited;
   fClassRegister := TObjectList.Create(True);
+  fClassRefRegister := TObjectList.Create(True);
   fHelperClassRegister := TStringList.Create;
   fEventHandlerList := TEventHandlers.Create(Self);
 
@@ -3573,6 +3961,9 @@ begin
   // Create and Register Wrapper for TObject
   RegisterDelphiWrapper(TPyDelphiObject);
 
+  // Create and Register Wrapper for TClass
+  RegisterDelphiClassWrapper(TPyDelphiClass);
+
   // Register Notify event Handler
   EventHandlers.RegisterHandler(TNotifyEventHandler);
 
@@ -3602,6 +3993,16 @@ begin
   Engine.Py_DECREF(_obj);
 end;
 
+procedure TPyDelphiWrapper.DefineVar(const AName: string; AValue: TClass);
+var
+  _obj : PPyObject;
+begin
+  Assert(Assigned(Module));
+  _obj := Wrap(AValue);
+  Module.SetVar(AnsiString(AName), _obj);
+  Engine.Py_DECREF(_obj);
+end;
+
 destructor TPyDelphiWrapper.Destroy;
 begin
   UnsubscribeFreeNotifications;
@@ -3609,6 +4010,7 @@ begin
   // when calling inherited, as we have overridden SetEngine that tries to
   // assign the new engine value to the registered types.
   FreeAndNil(fClassRegister);
+  FreeAndNil(fClassRefRegister);
   FreeAndNil(fHelperClassRegister);
   FreeAndNil(fEventHandlerList);
 
@@ -3645,6 +4047,10 @@ begin
   // Initialize Wrapper Types
   for i := 0 to fClassRegister.Count - 1 do
     with TRegisteredClass(fClassRegister[i]).PythonType do
+      if not Initialized then Initialize;
+  // Initialize Wrapper Types
+  for i := 0 to fClassRefRegister.Count - 1 do
+    with TRegisteredClass(fClassRefRegister[i]).PythonType do
       if not Initialized then Initialize;
   // Initialize Helper Types
   for i := 0 to fHelperClassRegister.Count - 1 do
@@ -3690,6 +4096,22 @@ begin
     for i := fEventHandlerList.Count - 1 downto 0 do
       if fEventHandlerList[i].Component = ADeletedObject then
         fEventHandlerList.Delete(i);
+end;
+
+procedure TPyDelphiWrapper.RegisterDelphiClassWrapper(
+  AWrapperClass: TPyDelphiClassClass);
+Var
+  RegisteredClass : TRegisteredClass;
+begin
+  Assert(Assigned(AWrapperClass));
+
+  RegisteredClass := TRegisteredClass.Create;
+  RegisteredClass.DelphiClass := AWrapperClass.DefinedDelphiClass;
+  RegisteredClass.PythonType := TPythonType.Create(Self);
+  RegisteredClass.PythonType.Engine := Engine;
+  RegisteredClass.PythonType.Module := fModule;
+  RegisteredClass.PythonType.PyObjectClass := AWrapperClass;
+  fClassRefRegister.Add(RegisteredClass);
 end;
 
 procedure TPyDelphiWrapper.RegisterDelphiWrapper(
@@ -3744,6 +4166,9 @@ begin
     if Assigned(fClassRegister) then
       for i := 0 to fClassRegister.Count - 1 do
         TRegisteredClass(fClassRegister[i]).PythonType.Engine := Value;
+    if Assigned(fClassRefRegister) then
+      for i := 0 to fClassRefRegister.Count - 1 do
+        TRegisteredClass(fClassRefRegister[i]).PythonType.Engine := Value;
     // Helper Types
     if Assigned(fHelperClassRegister) then
       for i := 0 to fHelperClassRegister.Count - 1 do
@@ -3764,6 +4189,9 @@ begin
     if Assigned(fClassRegister) then
       for i := 0 to fClassRegister.Count - 1 do
         TRegisteredClass(fClassRegister[i]).PythonType.Module := Value;
+    if Assigned(fClassRefRegister) then
+      for i := 0 to fClassRefRegister.Count - 1 do
+        TRegisteredClass(fClassRefRegister[i]).PythonType.Module := Value;
     if Assigned(fHelperClassRegister) then
       for i := 0 to fHelperClassRegister.Count - 1 do
         TPythonType(fHelperClassRegister.Objects[i]).Module := Value;
@@ -3786,6 +4214,52 @@ begin
   if Assigned(fEventHandlerList) then
     for i := fEventHandlerList.Count - 1 downto 0 do
       fEventHandlerList[i].Unsubscribe;
+end;
+
+function TPyDelphiWrapper.Wrap(AObj: TObject; aFromConstructor: Boolean): PPyObject;
+var
+  Ownership : TObjectOwnership;
+begin
+  // special case, TComponents created with a non-nil Owner should not be owned by Python
+  if (AObj is TComponent) and Assigned(TComponent(AObj).Owner) then
+    Ownership := soReference
+  else
+    Ownership := ObjectOwnershipFromBool[aFromConstructor];
+
+  Result := Wrap(AObj, Ownership);
+end;
+
+function TPyDelphiWrapper.Wrap(ACls: TClass): PPyObject;
+Var
+  i : integer;
+  Index : integer;
+  DelphiClass: TClass;
+begin
+  CheckEngine;
+  // We cast the python object to the right delphi type
+  if not Assigned(ACls) then
+    Result := Engine.ReturnNone
+  else begin
+    // find nearest registered ancestor
+    Index := -1;
+    DelphiClass := ACls;
+    while Assigned(DelphiClass) do begin
+      for i := 0 to fClassRefRegister.Count - 1 do
+        if TRegisteredClass(fClassRefRegister[i]).DelphiClass = DelphiClass then begin
+          Index := i;
+          break;
+        end;
+      if Index >= 0 then break;
+      DelphiClass := DelphiClass.ClassParent;
+    end;
+    Assert(Index >= 0, 'Internal Error in PyDelphiWrapper.Wrap'); // shouldn't happen
+
+    Result := TRegisteredClass(fClassRefRegister[Index]).PythonType.CreateInstance;
+    with PythonToDelphi(Result) as TPyDelphiClass do begin
+      DelphiClass := ACls;
+      PyDelphiWrapper := Self;
+    end;
+  end;
 end;
 
 function TPyDelphiWrapper.Wrap(AObj: TObject;
