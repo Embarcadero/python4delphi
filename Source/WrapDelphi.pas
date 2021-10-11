@@ -533,6 +533,8 @@ Type
     function ToList_Wrapper(args : PPyObject) : PPyObject; cdecl;
     function SetProps(args, keywords : PPyObject) : PPyObject; cdecl;
     function Dir_Wrapper(args: PPyObject): PPyObject; cdecl;
+    function Claim_Wrapper(args : PPyObject) : PPyObject; cdecl;
+    function Release_Wrapper(args : PPyObject) : PPyObject; cdecl;
     // Exposed Getters
     function Get_ClassName(Acontext : Pointer) : PPyObject; cdecl;
     function Get_Owned(Acontext : Pointer) : PPyObject; cdecl;
@@ -1777,6 +1779,15 @@ begin
         PyUnicodeFromString(Format(rs_ErrCheckBound, [ClassName])));
 end;
 
+function TPyDelphiObject.Claim_Wrapper(args: PPyObject): PPyObject;
+begin
+  Adjust(@Self);
+  if Assigned(fDelphiObject) then
+    Owned := True;
+  Result := GetSelf;
+  GetPythonEngine.Py_XINCREF(Result);
+end;
+
 function TPyDelphiObject.Compare(obj: PPyObject): Integer;
 Var
   PyObject : TPyObject;
@@ -2482,6 +2493,19 @@ begin
     'If the object is a container (TStrings, TComponent...), it returns the content of the sequence as a Python list object.');
   PythonType.AddMethod('__dir__', @TPyDelphiObject.Dir_Wrapper,
     'Returns the list of all methods, fields and properties of this instance.');
+
+  PythonType.AddMethod('__claim__', @TPyDelphiObject.Claim_Wrapper,
+    'claims ownership of the delphi object, returns itself to allow chaining');
+  PythonType.AddMethod('__release__', @TPyDelphiObject.Release_Wrapper,
+    'releases ownership of the delphi object, returns itself to allow chaining');
+end;
+
+function TPyDelphiObject.Release_Wrapper(args: PPyObject): PPyObject;
+begin
+  Adjust(@Self);
+  Owned := False;
+  Result := GetSelf;
+  GetPythonEngine.Py_XINCREF(Result);
 end;
 
 function TPyDelphiObject.Repr: PPyObject;
