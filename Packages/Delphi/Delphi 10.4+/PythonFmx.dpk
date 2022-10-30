@@ -32,8 +32,19 @@ package PythonFmx;
 
 requires
   rtl,
+  {$ifdef android}
+  {$message 'If compilation fails please add $(BDSCOMMONDIR)\Dcp\$(Platform) to the Library path'}
+  {$endif}
+  {$ifdef win64}
+  {$message 'If compilation fails please remove $(BDSCOMMONDIR)\Dcp and add $(BDSCOMMONDIR)\Dcp\$(Platform) to the Library path'}
+  {$endif}
   fmx,
+  {$ifdef linux64}
+  {$message 'If compilation fails please add $(BDSCatalogRepositoryAllUsers)\FmxLinux-<Version>\Redist to the Library and DCU Debug Paths'}
+  {$message 'The Warning below regarding Fmx.Bind.Navigator implicitly imported into package PythonFmx is expected'}
+  {$else}
   bindcompfmx,
+  {$endif}
   python;
 
 contains
