@@ -1,4 +1,4 @@
-﻿(**************************************************************************)
+(**************************************************************************)
 (*                                                                        *)
 (* Module:  Unit 'PythonEngine'     Copyright (c) 1997                    *)
 (*                                                                        *)
@@ -4684,7 +4684,7 @@ begin
   for I := 0 to argc do begin
     {
        ... the first entry should refer to the script file to be executed rather
-       than the executable hosting the Python interpreter. If there isn’t a
+       than the executable hosting the Python interpreter. If there isn�t a
        script that will be run, the first entry in argv can be an empty string.
     }
     if I = 0 then
@@ -5577,7 +5577,7 @@ begin
         begin
           wd := (DayOfWeek( dt ) + 7 - 2) mod 7; // In Python, Monday is the first day (=0)
           jd := Round(EncodeDate(y,m,d)-EncodeDate(y,1,1))+1; // This shoud be the Julian day, the day in a year (0-366)
-          dl := -1; // This is daylight save... ?Ξ?Ξ? I don't know what it is...
+          dl := -1; // This is daylight save... ??????? I don't know what it is...
           Result := ArrayToPyTuple( [y, m, d, h, mi, sec, wd, jd, dl] );
         end
         else if (DatetimeConversionMode = dcmToDatetime) then

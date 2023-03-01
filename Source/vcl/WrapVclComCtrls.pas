@@ -1,4 +1,4 @@
-﻿{$I ..\Definition.Inc}
+{$I ..\Definition.Inc}
 
 unit WrapVclComCtrls;
 
