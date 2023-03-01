@@ -1,4 +1,4 @@
-﻿{$REGION 'Licence'}
+{$REGION 'Licence'}
 {
    Wrapper classes for FireDAC TFDTable and TFDQuery
    Original Code by https://github.com/hartmutdavid
