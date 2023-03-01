@@ -877,6 +877,7 @@ Type
     function  GetHelperType(const TypeName : string) : TPythonType;
     //  Function that provides a Python object wrapping an object
     function Wrap(AObj : TObject; AOwnership: TObjectOwnership = soReference) : PPyObject;
+    function WrapClass(AClass: TClass): PPyObject;
     {$IFDEF EXTENDED_RTTI}
     //  Function that provides a Python object wrapping a record
     function WrapRecord(Address: Pointer; Typ: TRttiStructuredType): PPyObject;
@@ -1347,20 +1348,6 @@ begin
     V := Value.GetArrayElement(i).AsVariant;
     PyEngine.PyList_SetItem(Result, I, PyEngine.VariantAsPyObject(V));
   end;
-end;
-
-function ClassRefToPython(const AValue: TValue; out AErrMsg: string): PPyObject;
-var
-  LPythonType: TPythonType;
-begin
-  LPythonType := DelphiToPythonType(AValue.AsClass);
-  if Assigned(LPythonType) then
-    Result := PPyObject(LPythonType.TheTypePtr)
-  else
-    Result := nil;
-
-  if not Assigned(Result) then
-    AErrMsg := rs_ErrValueToPython;
 end;
 
 function SimpleValueToPython(const Value: TValue; out ErrMsg: string): PPyObject;
@@ -2436,13 +2423,9 @@ begin
       Result := GetPythonEngine.ReturnNone
     else if ret.Kind = tkClass then
       Result := DelphiWrapper.Wrap(ret.AsObject)
-    else if ret.Kind = tkClassRef then begin
-      Result := ClassRefToPython(ret, ErrMsg);
-      if Result = nil then
-        with PythonType.Engine do
-          PyErr_SetObject(PyExc_TypeError^, PyUnicodeFromString(
-            Format(rs_ErrInvalidRet, [MethName, ErrMsg])));
-    end else begin
+    else if ret.Kind = tkClassRef then
+      Result := DelphiWrapper.WrapClass(ret.AsClass)
+    else begin
       Result := SimpleValueToPython(ret, ErrMsg);
       if Result = nil then
         with PythonType.Engine do
@@ -4581,7 +4564,7 @@ end;
 
 function TPyDelphiWrapper.Wrap(AObj: TObject;
   AOwnership: TObjectOwnership): PPyObject;
-Var
+var
   i : integer;
   DelphiClass : TClass;
   Index : integer;
@@ -4611,6 +4594,35 @@ begin
       PyDelphiWrapper := Self;
       Owned := AOwnership = soOwned;
     end;
+  end;
+end;
+
+function TPyDelphiWrapper.WrapClass(AClass: TClass): PPyObject;
+var
+  I : integer;
+  DelphiClass : TClass;
+  Index : integer;
+begin
+  CheckEngine;
+  if not Assigned(AClass) then
+    Result := Engine.ReturnNone
+  else begin
+    // find nearest registered ancestor
+    Index := -1;
+    DelphiClass := AClass;
+    while Assigned(DelphiClass) do begin
+      for I := 0 to fClassRegister.Count - 1 do
+        if TRegisteredClass(fClassRegister[I]).DelphiClass = DelphiClass then begin
+          Index := I;
+          break;
+        end;
+      if Index >= 0 then break;
+      DelphiClass := DelphiClass.ClassParent;
+    end;
+    Assert(Index >= 0, 'Internal Error in PyDelphiWrapper.WrapClass'); // shouldn't happen
+
+    Result := PPyObject(TRegisteredClass(fClassRegister[Index]).PythonType.TheTypePtr);
+    Engine.Py_XINCREF(Result);
   end;
 end;
 
@@ -4681,4 +4693,3 @@ finalization
 {$ENDIF}
   FreeAndNil(gRegisteredUnits);
 end.
-
