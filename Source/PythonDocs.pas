@@ -308,6 +308,10 @@ end;
 
 class function TPythonDocServer.GetDocDir(): string;
 begin
+  {$IFDEF ANDROID}
+  Exit(TPath.GetDocumentsPath());
+  {$ENDIF ANDROID}
+
   {$IFDEF DEBUG}
   Result := TPath.Combine(ExtractFilePath(
     GetModuleName(HInstance)), DOC_DIR_NAME);
