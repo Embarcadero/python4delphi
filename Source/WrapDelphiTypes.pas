@@ -98,7 +98,11 @@ type
 implementation
 
 uses
-  Math;
+  Math
+  {$IFDEF DELPHI10_OR_HIGHER}
+  , System.UITypes
+  {$ENDIF DELPHI10_OR_HIGHER}
+  ;
 
  { Register the wrappers, the globals and the constants }
 type
@@ -114,6 +118,31 @@ type
 procedure TTypesRegistration.DefineVars(APyDelphiWrapper: TPyDelphiWrapper);
 begin
   inherited;
+  {$IFDEF DELPHI10_OR_HIGHER}
+  APyDelphiWrapper.DefineVar('crDefault', crDefault);
+  APyDelphiWrapper.DefineVar('crNone', crNone);
+  APyDelphiWrapper.DefineVar('crArrow', crArrow);
+  APyDelphiWrapper.DefineVar('crCross', crCross);
+  APyDelphiWrapper.DefineVar('crIBeam', crIBeam);
+  APyDelphiWrapper.DefineVar('crSize', crSize);
+  APyDelphiWrapper.DefineVar('crSizeNESW', crSizeNESW);
+  APyDelphiWrapper.DefineVar('crSizeNS', crSizeNS);
+  APyDelphiWrapper.DefineVar('crSizeNWSE', crSizeNWSE);
+  APyDelphiWrapper.DefineVar('crSizeWE', crSizeWE);
+  APyDelphiWrapper.DefineVar('crUpArrow', crUpArrow);
+  APyDelphiWrapper.DefineVar('crHourGlass', crHourGlass);
+  APyDelphiWrapper.DefineVar('crDrag', crDrag);
+  APyDelphiWrapper.DefineVar('crNoDrop', crNoDrop);
+  APyDelphiWrapper.DefineVar('crHSplit', crHSplit);
+  APyDelphiWrapper.DefineVar('crVSplit', crVSplit);
+  APyDelphiWrapper.DefineVar('crMultiDrag', crMultiDrag);
+  APyDelphiWrapper.DefineVar('crSQLWait', crSQLWait);
+  APyDelphiWrapper.DefineVar('crNo', crNo);
+  APyDelphiWrapper.DefineVar('crAppStart', crAppStart);
+  APyDelphiWrapper.DefineVar('crHelp', crHelp);
+  APyDelphiWrapper.DefineVar('crHandPoint', crHandPoint);
+  APyDelphiWrapper.DefineVar('crSizeAll', crSizeAll);
+  {$ENDIF DELPHI10_OR_HIGHER}
 end;
 
 function TTypesRegistration.Name: string;
@@ -130,6 +159,7 @@ begin
 end;
 
 { Helper functions }
+
 function WrapPoint(APyDelphiWrapper : TPyDelphiWrapper; const APoint : TPoint) : PPyObject;
 var
   _type : TPythonType;
@@ -509,7 +539,6 @@ begin
   PythonType.Services.Basic := [bsGetAttrO, bsSetAttrO, bsRepr, bsStr, bsRichCompare];
 end;
 
-
 { TPyDelphiSize }
 
 function TPyDelphiSize.Compare(obj: PPyObject): Integer;
@@ -612,4 +641,5 @@ end;
 
 initialization
   RegisteredUnits.Add(TTypesRegistration.Create);
+
 end.
