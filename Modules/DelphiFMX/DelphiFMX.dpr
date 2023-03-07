@@ -1,4 +1,8 @@
+{$IFDEF ANDROID}
+program DelphiFMX;
+{$ELSE}
 library DelphiFMX;
+{$ENDIF ANDROID}
 
 uses
   System.StartUpCopy,
