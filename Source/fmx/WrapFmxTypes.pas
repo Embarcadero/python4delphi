@@ -549,7 +549,7 @@ begin
       Result := False;
       with GetPythonEngine do
         PyErr_SetString (PyExc_AttributeError^,
-          PAnsiChar(AnsiString(Format('%s receives only RectF objects', [AAttributeName]))));
+          PAnsiChar(AnsiString(Format('%s receives only Touch objects', [AAttributeName]))));
     end;
   end;
 end;
@@ -580,7 +580,7 @@ end;
 class procedure TPyDelphiFmxObject.RegisterGetSets(PythonType: TPythonType);
 begin
   PythonType.AddGetSet('Parent', @TPyDelphiFmxObject.Get_Parent, @TPyDelphiFmxObject.Set_Parent,
-        'Returns/Sets the Control Visibility', nil);
+    'Returns/Sets the Control Visibility', nil);
 end;
 
 class procedure TPyDelphiFmxObject.RegisterMethods(PythonType: TPythonType);
@@ -713,6 +713,7 @@ begin
 end;
 
 { TPyDelphiSizeF }
+
 function TPyDelphiSizeF.Compare(obj: PPyObject): Integer;
 var
   LOther : TPyDelphiSizeF;
@@ -813,6 +814,7 @@ begin
 end;
 
 { TPyDelphiCustomPopupMenu }
+
 class function TPyDelphiCustomPopupMenu.DelphiObjectClass: TClass;
 begin
   Result := TCustomPopupMenu;
@@ -830,6 +832,7 @@ begin
 end;
 
 { TPyDelphiBounds }
+
 constructor TPyDelphiBounds.CreateWith(APythonType: TPythonType; args:
     PPyObject);
 var
@@ -887,6 +890,7 @@ begin
 end;
 
 { TPyDelphiControlSize }
+
 constructor TPyDelphiControlSize.CreateWith(APythonType: TPythonType; args:
     PPyObject);
 var
@@ -943,6 +947,7 @@ begin
 end;
 
 { TPyDelphiRectF }
+
 function TPyDelphiRectF.Compare(obj: PPyObject): Integer;
 var
   LOther : TPyDelphiRectF;
@@ -1594,4 +1599,5 @@ end;
 
 initialization
   RegisteredUnits.Add(TTypesRegistration.Create);
+
 end.
