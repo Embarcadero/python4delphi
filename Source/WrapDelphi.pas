@@ -3063,11 +3063,6 @@ begin
       AddGetSet('__owned__', @TPyDelphiObject.Get_Owned, @TPyDelphiObject.Set_Owned,
         'Returns True if the wrapper owns the Delphi instance.', nil);
     end;
-
-  {$IFDEF EXPOSE_MEMBERS}
-  ExposeFields(DelphiObjectClass, PythonType, PythonType.Owner as TPyDelphiWrapper, true);
-  ExposeProperties(DelphiObjectClass, PythonType, PythonType.Owner as TPyDelphiWrapper, true);
-  {$ENDIF EXPOSE_MEMBERS}
 end;
 
 class procedure TPyDelphiObject.RegisterMethods(PythonType: TPythonType);
@@ -3090,11 +3085,6 @@ begin
     'If the object is a container (TStrings, TComponent...), it returns the content of the sequence as a Python list object.');
   PythonType.AddMethod('__dir__', @TPyDelphiObject.Dir_Wrapper,
     'Returns the list of all methods, fields and properties of this instance.');
-
-  {$IFDEF EXPOSE_MEMBERS}
-  ExposeMethods(DelphiObjectClass, PythonType,PythonType.Owner as TPyDelphiWrapper,
-    true, [], ['CPP_ABI_1', 'CPP_ABI_2', 'CPP_ABI_3']);
-  {$ENDIF EXPOSE_MEMBERS}
 end;
 
 function TPyDelphiObject.Repr: PPyObject;
@@ -3325,6 +3315,11 @@ begin
   //Try to load the class doc string from doc server
   if TPythonDocServer.Instance.ReadTypeDocStr(DelphiObjectClass.ClassInfo, LDocStr) then
     PythonType.DocString.Text := LDocStr;
+
+  ExposeMethods(DelphiObjectClass, PythonType,PythonType.Owner as TPyDelphiWrapper,
+    true, [], ['CPP_ABI_1', 'CPP_ABI_2', 'CPP_ABI_3']);
+  ExposeFields(DelphiObjectClass, PythonType, PythonType.Owner as TPyDelphiWrapper, true);
+  ExposeProperties(DelphiObjectClass, PythonType, PythonType.Owner as TPyDelphiWrapper, true);
   {$ENDIF EXPOSE_MEMBERS}
 end;
 
