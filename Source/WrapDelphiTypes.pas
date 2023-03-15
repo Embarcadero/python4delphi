@@ -9,7 +9,11 @@ uses
   SysUtils,
   PythonEngine,
   Types,
-  WrapDelphi;
+  WrapDelphi
+  {$IFDEF DELPHI10_OR_HIGHER}
+  , System.UITypes
+  {$ENDIF DELPHI10_OR_HIGHER}
+  ;
 
 type
   TPyDelphiPoint = class(TPyObject)
@@ -95,14 +99,14 @@ type
   function CheckRectAttribute(AAttribute : PPyObject; const AAttributeName : string; out AValue : TRect) : Boolean;
   function CheckSizeAttribute(AAttribute : PPyObject; const AAttributeName : string; out AValue : TSize) : Boolean;
 
+  {$IFDEF DELPHI10_OR_HIGHER}
+  function MouseButtonToPython(const AMouseButton: TMouseButton): PPyObject;
+  {$ENDIF DELPHI10_OR_HIGHER}
+
 implementation
 
 uses
-  Math
-  {$IFDEF DELPHI10_OR_HIGHER}
-  , System.UITypes
-  {$ENDIF DELPHI10_OR_HIGHER}
-  ;
+  Math, Rtti;
 
  { Register the wrappers, the globals and the constants }
 type
@@ -157,6 +161,14 @@ begin
   APyDelphiWrapper.RegisterHelperType(TPyDelphiRect);
   APyDelphiWrapper.RegisterHelperType(TPyDelphiSize);
 end;
+
+{$IFDEF DELPHI10_OR_HIGHER}
+function MouseButtonToPython(const AMouseButton: TMouseButton): PPyObject;
+begin
+  Result := GetPythonEngine.PyUnicodeFromString(
+    TRttiEnumerationType.GetName<TMouseButton>(AMouseButton));
+end;
+{$ENDIF DELPHI10_OR_HIGHER}
 
 { Helper functions }
 
