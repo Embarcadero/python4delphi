@@ -1977,7 +1977,7 @@ begin
         Py_XDecRef(LItem);
       end;
       //The content
-      LItem := PyByteArray_FromObject(LBytes);
+      LItem := PyBytes_FromObject(LBytes);
       Py_XDecRef(LBytes);
       PyList_Append(Result, LItem);
       Py_XDecRef(LItem);
@@ -2059,9 +2059,9 @@ begin
   Adjust(@Self);
   Result := nil;
   with GetPythonEngine() do begin
-    if PyArg_ParseTuple(AArgs, 'Yi:Create', @LValue, @LCount) <> 0 then
-      if PyByteArray_Check(LValue) then begin
-        LBuffer := TEncoding.Default.GetBytes(String(PyByteArray_AsString(LValue)));
+    if PyArg_ParseTuple(AArgs, 'Si:Create', @LValue, @LCount) <> 0 then
+      if PyBytes_Check(LValue) then begin
+        LBuffer := TEncoding.Default.GetBytes(String(PyBytesAsAnsiString(LValue)));
         Result := PyLong_FromLong(DelphiObject.Write(LBuffer, LCount));
       end;
   end;
@@ -2300,13 +2300,13 @@ begin
       if APythonType.Engine.PyByteArray_Check(LBytes) then begin
         DelphiObject := TBytesStreamClass(DelphiObjectClass).Create(
           TEncoding.Default.GetBytes(
-            String(APythonType.Engine.PyByteArray_AsString(LBytes))));
+            String(APythonType.Engine.PyByteArrayAsAnsiString(LBytes))));
       end;
     end else if APythonType.Engine.PyArg_ParseTuple(args, 'S:Create', @LBytes) <> 0 then begin
       if APythonType.Engine.PyBytes_Check(LBytes) then begin
         DelphiObject := TBytesStreamClass(DelphiObjectClass).Create(
           TEncoding.Default.GetBytes(
-            String(APythonType.Engine.PyBytes_AsString(LBytes))));
+            String(APythonType.Engine.PyBytesAsAnsiString(LBytes))));
       end;
     end;
 
