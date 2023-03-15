@@ -1612,6 +1612,7 @@ type
     PyBytes_Size:function (ob:PPyObject):NativeInt; cdecl;
     PyBytes_DecodeEscape:function(s:PAnsiChar; len:NativeInt; errors:PAnsiChar; unicode:NativeInt; recode_encoding:PAnsiChar):PPyObject; cdecl;
     PyBytes_Repr:function(ob:PPyObject; smartquotes:integer):PPyObject; cdecl;
+    PyBytes_FromObject: function(ob:PPyObject): PPyObject; cdecl;
     PyByteArray_Concat: procedure(var ob1: PPyObject; ob2: PPyObject); cdecl;
     PyByteArray_Resize: procedure(var ob1: PPyObject; len: Py_ssize_t); cdecl;
     PyByteArray_FromObject: function(ob:PPyObject): PPyObject; cdecl;
@@ -1986,6 +1987,7 @@ type
     function PyUnicodeAsString( obj : PPyObject ) : UnicodeString;
     function PyUnicodeAsUTF8String( obj : PPyObject ) : RawByteString;
     function PyBytesAsAnsiString( obj : PPyObject ) : AnsiString;
+    function PyByteArrayAsAnsiString( obj : PPyObject ) : AnsiString;
 
     // Public Properties
     property ClientCount : Integer read GetClientCount;
@@ -3810,6 +3812,7 @@ begin
   PyBytes_DecodeEscape        := Import('PyBytes_DecodeEscape');
   PyBytes_Repr                := Import('PyBytes_Repr');
   _PyBytes_Resize             := Import('_PyBytes_Resize');
+  PyBytes_FromObject          := Import('PyBytes_FromObject');
   PyByteArray_AsString        := Import('PyByteArray_AsString');
   PyByteArray_Concat          := Import('PyByteArray_Concat');
   PyByteArray_Resize          := Import('PyByteArray_Resize');
@@ -6038,6 +6041,21 @@ begin
   strings.Clear;
   for i := 0 to PyTuple_Size( tuple ) - 1 do
     strings.Add( PyObjectAsString( PyTuple_GetItem( tuple, i ) ) );
+end;
+
+function TPythonEngine.PyByteArrayAsAnsiString(obj: PPyObject): AnsiString;
+var
+  LBuffer: PAnsiChar;
+  LSize: Py_ssize_t;
+begin
+  if PyByteArray_Check(obj) then
+  begin
+    LSize := PyByteArray_Size(obj);
+    LBuffer := PyByteArray_AsString(obj);
+    SetString(Result, LBuffer, LSize);
+  end
+  else
+    raise EPythonError.CreateFmt(SPyConvertionError, ['PyByteArrayAsAnsiString', 'ByteArray']);
 end;
 
 function TPythonEngine.PyBytesAsAnsiString(obj: PPyObject): AnsiString;
