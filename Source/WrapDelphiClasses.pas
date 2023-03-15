@@ -1926,7 +1926,7 @@ class procedure TPyDelphiStream.RegisterMethods(PythonType: TPythonType);
 begin
   inherited;
   PythonType.AddMethod('ReadBytes', @TPyDelphiStream.ReadBytes_Wrapper,
-    'TPyDelphiStream.ReadBytes()' + #10 + 'Read content as bytearray.');
+    'TPyDelphiStream.ReadBytes()' + #10 + 'Read content as bytes.');
   PythonType.AddMethod('ReadInt', @TPyDelphiStream.ReadInt_Wrapper,
     'TPyDelphiStream.ReadInt()' + #10 + 'Read content as integer.');
   PythonType.AddMethod('ReadString', @TPyDelphiStream.ReadString_Wrapper,
@@ -1935,7 +1935,7 @@ begin
     'TPyDelphiStream.ReadFloat()' + #10 + 'Read content as float.');
 
   PythonType.AddMethod('WriteBytes', @TPyDelphiStream.WriteBytes_Wrapper,
-    'TPyDelphiStream.WriteBytes()' + #10 + 'Write content as bytearray.');
+    'TPyDelphiStream.WriteBytes()' + #10 + 'Write content as bytes.');
   PythonType.AddMethod('WriteInt', @TPyDelphiStream.WriteInt_Wrapper,
     'TPyDelphiStream.WriteInt()' + #10 + 'Write content as integer.');
   PythonType.AddMethod('WriteString', @TPyDelphiStream.WriteString_Wrapper,
