@@ -198,7 +198,7 @@ type
     property DelphiObject: TLinkLabel read GetDelphiObject write SetDelphiObject;
   end;
 
-  function SysLinkTypeToPython(const ASymLinkType: TSysLinkType): PPyObject;
+  function SysLinkTypeToPython(const ASysLinkType: TSysLinkType): PPyObject;
 
 implementation
 
@@ -254,10 +254,10 @@ begin
   APyDelphiWrapper.EventHandlers.RegisterHandler(TSysLinkEventHandler);
 end;
 
-function SysLinkTypeToPython(const ASymLinkType: TSysLinkType): PPyObject;
+function SysLinkTypeToPython(const ASysLinkType: TSysLinkType): PPyObject;
 begin
   Result := GetPythonEngine.PyUnicodeFromString(
-    TRttiEnumerationType.GetName<TSysLinkType>(ASymLinkType));
+    TRttiEnumerationType.GetName<TSysLinkType>(ASysLinkType));
 end;
 
 { TPyDelphiShape }
