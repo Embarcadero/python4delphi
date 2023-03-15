@@ -939,6 +939,7 @@ Type
 
     function VirtualMethodImplementation(): pointer;
 
+    class function MethodDocStr(const ARttiMethod: TRttiMethod): string;
     class function Methods_Wrapper(const ASelf, AArgs, AKeyWords: PPyObject): PPyObject; static; cdecl;
 
     property MethodHandler: TExposedMethodHandler read FMethodHandler write FMethodHandler;
@@ -1136,6 +1137,65 @@ function TExposedMethodImplementation.GetDocString(): string;
 begin
   Result := Format('<Delphi method %s of type %s at %x>', [
     Name, FRttiType.Name, NativeInt(Self)]);
+end;
+
+class function TExposedMethodImplementation.MethodDocStr
+(const ARttiMethod: TRttiMethod): string;
+const
+  METHOD_DOC_STR_PATTERN = '%s.%s(%s)';
+var
+  LArgsStr: string;
+  LRttiParameter: TRttiParameter;
+begin
+  if (Length(ARttiMethod.GetParameters) = 0) then
+    Exit(String.Empty);
+
+  LArgsStr := String.Empty;
+  for LRttiParameter in ARttiMethod.GetParameters do begin
+    if not LArgsStr.IsEmpty then
+      LArgsStr := LArgsStr + ', ';
+
+    if not Assigned(LRttiParameter.ParamType) then
+      LArgsStr := LArgsStr + LRttiParameter.Name
+    else
+      LArgsStr := LArgsStr + LRttiParameter.Name + '=' + LRttiParameter.ParamType.Name;
+  end;
+
+  Result := String.Format(METHOD_DOC_STR_PATTERN, [
+    ARttiMethod.Parent.Name, ARttiMethod.Name, LArgsStr]);
+
+  if Assigned(ARttiMethod.ReturnType) then
+    Result := Result + ': ' + ARttiMethod.ReturnType.Name;
+
+  //Args:
+  //    param1: The first parameter.
+  //    param2: The second parameter.
+  if Length(ARttiMethod.GetParameters()) > 0 then begin
+    Result := Result + #10 + #10 + 'Args:' + #10;
+    for LRttiParameter in ARttiMethod.GetParameters do begin
+      if Assigned(LRttiParameter.ParamType) then
+        Result := Result + String.Format('    %s (%s)', [LRttiParameter.Name, LRttiParameter.ParamType.Name])
+      else if TParamFlag.pfVar in LRttiParameter.Flags then
+        Result := Result + String.Format('    %s (%s)', [LRttiParameter.Name, 'var'])
+      else if TParamFlag.pfConst in LRttiParameter.Flags then
+        Result := Result + String.Format('    %s (%s)', [LRttiParameter.Name, 'const'])
+      else if TParamFlag.pfOut in LRttiParameter.Flags then
+        Result := Result + String.Format('    %s (%s)', [LRttiParameter.Name, 'out']);
+
+      Result := Result + #10;
+    end;
+  end;
+
+  if Assigned(ARttiMethod.ReturnType) then begin
+    //Returns:
+    //    The return value. True for success, False otherwise.
+
+    Result := Result + #10 + 'Returns:' + #10;
+    Result := Result + String.Format('    Return type: %s', [
+      ARttiMethod.ReturnType.Name]) + #10;
+  end;
+
+  Result := Result + #10;
 end;
 
 function TExposedMethodImplementation.VirtualMethodImplementation(): pointer;
@@ -3399,6 +3459,11 @@ begin
             LExposedMethod.DocString := AnsiString(LDocStr);
         LClass := LClass.ClassParent;
       end;
+
+      //Build the DocStr including method args
+      LExposedMethod.DocString :=
+        AnsiString(TExposedMethodImplementation.MethodDocStr(LRttiMethod))
+        + LExposedMethod.DocString;
 
       //Adds the Python method
       if LRttiMethod.IsStatic then
