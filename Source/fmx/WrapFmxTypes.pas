@@ -556,7 +556,8 @@ end;
 
 function TouchActionToPython(ATouchAction: TTouchAction): PPyObject;
 begin
-  Result := GetPythonEngine.PyUnicodeFromString(TRttiEnumerationType.GetName(ATouchAction));
+  Result := GetPythonEngine.PyUnicodeFromString(
+    TRttiEnumerationType.GetName<TTouchAction>(ATouchAction));
 end;
 
 { TPyDelphiFmxObject }
@@ -1219,7 +1220,7 @@ begin
   if Assigned(Callable) and PythonOK then
     with GetPythonEngine do begin
       LPyObject := PyDelphiWrapper.Wrap(Sender);
-      LPyButton := PyLong_FromLong(Ord(Button));
+      LPyButton := MouseButtonToPython(Button);
       LPyX := PyFloat_FromDouble(X);
       LPyY := PyFloat_FromDouble(Y);
       LPyTuple := PyTuple_New(5);
