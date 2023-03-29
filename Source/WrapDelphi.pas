@@ -939,6 +939,7 @@ Type
 
     function VirtualMethodImplementation(): pointer;
 
+    class function MethodDocStr(const ARttiMethod: TRttiMethod): string;
     class function Methods_Wrapper(const ASelf, AArgs, AKeyWords: PPyObject): PPyObject; static; cdecl;
 
     property MethodHandler: TExposedMethodHandler read FMethodHandler write FMethodHandler;
@@ -1136,6 +1137,42 @@ function TExposedMethodImplementation.GetDocString(): string;
 begin
   Result := Format('<Delphi method %s of type %s at %x>', [
     Name, FRttiType.Name, NativeInt(Self)]);
+end;
+
+class function TExposedMethodImplementation.MethodDocStr
+(const ARttiMethod: TRttiMethod): string;
+const
+  METHOD_DOC_STR_PATTERN = '%s.%s(%s)';
+var
+  LArgsStr: string;
+  LRttiParameter: TRttiParameter;
+begin
+  if (Length(ARttiMethod.GetParameters) = 0) then
+    Exit(String.Empty);
+
+  LArgsStr := String.Empty;
+  for LRttiParameter in ARttiMethod.GetParameters do begin
+    if not LArgsStr.IsEmpty then
+      LArgsStr := LArgsStr + ', ';
+
+    if not Assigned(LRttiParameter.ParamType) then
+      LArgsStr := LArgsStr + LRttiParameter.Name
+    else
+      LArgsStr := LArgsStr
+        + LRttiParameter.Name
+        + ': '
+        + LRttiParameter.ParamType.Name.Replace('T', '', []);
+  end;
+
+  Result := String.Format(METHOD_DOC_STR_PATTERN, [
+    ARttiMethod.Parent.Name, ARttiMethod.Name, LArgsStr]);
+
+  if Assigned(ARttiMethod.ReturnType) then
+    Result := Result
+      + ' -> '
+      + ARttiMethod.ReturnType.Name.Replace('T', '', []);
+
+  Result := Result + #10;
 end;
 
 function TExposedMethodImplementation.VirtualMethodImplementation(): pointer;
@@ -3399,6 +3436,11 @@ begin
             LExposedMethod.DocString := AnsiString(LDocStr);
         LClass := LClass.ClassParent;
       end;
+
+      //Build the DocStr including method args
+      LExposedMethod.DocString :=
+        AnsiString(TExposedMethodImplementation.MethodDocStr(LRttiMethod))
+        + LExposedMethod.DocString;
 
       //Adds the Python method
       if LRttiMethod.IsStatic then
