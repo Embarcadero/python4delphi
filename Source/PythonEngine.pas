@@ -1237,7 +1237,8 @@ type
 
     procedure LoadPythonInfoFromModule;
     function GetPythonModuleFromProcess(): NativeUInt;
-    function HasHostSymbols(): boolean;
+    // Check for Python symbols in the current loaded library (FDLLHandle)
+    function HasPythonSymbolsInLibrary(): boolean;
     procedure LoadFromHostSymbols();
     //Loading strategies
     function TryLoadFromHostSymbols(): boolean;
@@ -3097,16 +3098,10 @@ function TDynamicDll.GetPythonModuleFromProcess(): NativeUInt;
 {$IFNDEF FPC}
 
 function HasSymbols(const AModule: NativeUInt): boolean;
-  var
-    LPy_GetBuildInfo: function : PAnsiChar; cdecl;
-    LPy_IsInitialized: function: integer; cdecl;
   begin
     FDLLHandle := AModule;
     try
-      LPy_GetBuildInfo := Import('Py_GetBuildInfo', false);
-      LPy_IsInitialized := Import('Py_IsInitialized', false);
-      Result := Assigned(LPy_GetBuildInfo) and Assigned(LPy_GetBuildInfo())
-        and Assigned(LPy_IsInitialized) and (LPy_IsInitialized() <> 0);
+      Result := HasPythonSymbolsInLibrary();
     finally
       FDLLHandle := 0;
     end;
@@ -3312,10 +3307,16 @@ end;
 function TDynamicDll.TryLoadFromHostSymbols: boolean;
 begin
   //We want to look in for host symbols at first
+  {$IFNDEF FPC}
+  FDLLHandle := LoadLibrary('');
+  {$ELSE}
   FDLLHandle := 0;
-  Result := HasHostSymbols();
+  {$ENDIF}
+  Result := HasPythonSymbolsInLibrary();
   if Result then
-    LoadFromHostSymbols();
+    LoadFromHostSymbols()
+  else
+    FDLLHandle := 0;
 end;
 
 procedure TDynamicDll.LoadFromHostSymbols;
@@ -3416,12 +3417,15 @@ begin
   Result := Format( 'Dll %s could not be loaded. We must quit.', [DllName]);
 end;
 
-function TDynamicDll.HasHostSymbols: boolean;
+function TDynamicDll.HasPythonSymbolsInLibrary: boolean;
 var
+  LPy_GetBuildInfo: function: PAnsiChar; cdecl;
   LPy_IsInitialized: function: integer; cdecl;
 begin
+  LPy_GetBuildInfo := Import('Py_GetBuildInfo', false);
   LPy_IsInitialized := Import('Py_IsInitialized', false);
-  Result := Assigned(LPy_IsInitialized) and (LPy_IsInitialized() <> 0);
+  Result := Assigned(LPy_GetBuildInfo) and Assigned(LPy_GetBuildInfo())
+    and Assigned(LPy_IsInitialized) and (LPy_IsInitialized() <> 0);
 end;
 
 procedure TDynamicDll.Quit;
