@@ -3307,7 +3307,11 @@ end;
 function TDynamicDll.TryLoadFromHostSymbols: boolean;
 begin
   //We want to look in for host symbols at first
+  {$IFNDEF FPC}
   FDLLHandle := LoadLibrary('');
+  {$ELSE}
+  FDLLHandle := 0;
+  {$ENDIF}
   Result := HasPythonSymbolsInLibrary();
   if Result then
     LoadFromHostSymbols()
