@@ -1,0 +1,96 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{E251A069-8BBE-452B-A97D-8E495B2289C2}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="C++ Builder 10.4+\Python.cbproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="C++ Builder 10.4+\dclPython.cbproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="C++ Builder 10.4+\PythonVcl.cbproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="C++ Builder 10.4+\dclPythonVcl.cbproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="C++ Builder 10.4+\PythonFmx.cbproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="C++ Builder 10.4+\dclPythonFmx.cbproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="Python">
+        <MSBuild Projects="C++ Builder 10.4+\Python.cbproj"/>
+    </Target>
+    <Target Name="Python:Clean">
+        <MSBuild Projects="C++ Builder 10.4+\Python.cbproj" Targets="Clean"/>
+    </Target>
+    <Target Name="Python:Make">
+        <MSBuild Projects="C++ Builder 10.4+\Python.cbproj" Targets="Make"/>
+    </Target>
+    <Target Name="dclPython">
+        <MSBuild Projects="C++ Builder 10.4+\dclPython.cbproj"/>
+    </Target>
+    <Target Name="dclPython:Clean">
+        <MSBuild Projects="C++ Builder 10.4+\dclPython.cbproj" Targets="Clean"/>
+    </Target>
+    <Target Name="dclPython:Make">
+        <MSBuild Projects="C++ Builder 10.4+\dclPython.cbproj" Targets="Make"/>
+    </Target>
+    <Target Name="PythonVcl">
+        <MSBuild Projects="C++ Builder 10.4+\PythonVcl.cbproj"/>
+    </Target>
+    <Target Name="PythonVcl:Clean">
+        <MSBuild Projects="C++ Builder 10.4+\PythonVcl.cbproj" Targets="Clean"/>
+    </Target>
+    <Target Name="PythonVcl:Make">
+        <MSBuild Projects="C++ Builder 10.4+\PythonVcl.cbproj" Targets="Make"/>
+    </Target>
+    <Target Name="dclPythonVcl">
+        <MSBuild Projects="C++ Builder 10.4+\dclPythonVcl.cbproj"/>
+    </Target>
+    <Target Name="dclPythonVcl:Clean">
+        <MSBuild Projects="C++ Builder 10.4+\dclPythonVcl.cbproj" Targets="Clean"/>
+    </Target>
+    <Target Name="dclPythonVcl:Make">
+        <MSBuild Projects="C++ Builder 10.4+\dclPythonVcl.cbproj" Targets="Make"/>
+    </Target>
+    <Target Name="PythonFmx">
+        <MSBuild Projects="C++ Builder 10.4+\PythonFmx.cbproj"/>
+    </Target>
+    <Target Name="PythonFmx:Clean">
+        <MSBuild Projects="C++ Builder 10.4+\PythonFmx.cbproj" Targets="Clean"/>
+    </Target>
+    <Target Name="PythonFmx:Make">
+        <MSBuild Projects="C++ Builder 10.4+\PythonFmx.cbproj" Targets="Make"/>
+    </Target>
+    <Target Name="dclPythonFmx">
+        <MSBuild Projects="C++ Builder 10.4+\dclPythonFmx.cbproj"/>
+    </Target>
+    <Target Name="dclPythonFmx:Clean">
+        <MSBuild Projects="C++ Builder 10.4+\dclPythonFmx.cbproj" Targets="Clean"/>
+    </Target>
+    <Target Name="dclPythonFmx:Make">
+        <MSBuild Projects="C++ Builder 10.4+\dclPythonFmx.cbproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="Python;dclPython;PythonVcl;dclPythonVcl;PythonFmx;dclPythonFmx"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="Python:Clean;dclPython:Clean;PythonVcl:Clean;dclPythonVcl:Clean;PythonFmx:Clean;dclPythonFmx:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="Python:Make;dclPython:Make;PythonVcl:Make;dclPythonVcl:Make;PythonFmx:Make;dclPythonFmx:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>
