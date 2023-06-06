@@ -1,6 +1,7 @@
 //---------------------------------------------------------------------------
 
 #include <System.hpp>
+#include <Winapi.Shellscaling.hpp>
 #pragma hdrstop
 #pragma package(smart_init)
 //---------------------------------------------------------------------------
