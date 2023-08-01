@@ -3624,7 +3624,7 @@ begin
         if TPythonDocServer.Instance.ReadMemberDocStr(
           LClass.ClassInfo, LRttiField, LDocStr) then
             LExposedField.DocString := AnsiString(LDocStr);
-        LClass.ClassParent;
+        LClass := LClass.ClassParent;
       end;
 
       //Adds the Python attribute
