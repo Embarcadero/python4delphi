@@ -493,6 +493,58 @@ Type
   end;
 
   {
+    Abstract mapping relying on the object protocol.
+  }
+  TMappingAccess = class
+  private
+    FMapping: TObject;
+    FWrapper: TPyDelphiWrapper;
+  protected
+    function Wrap(const AObj: TObject;
+      const AOwnership: TObjectOwnership = soReference): PPyObject;
+  public
+    constructor Create(const AWrapper: TPyDelphiWrapper; const AMapping: TObject); virtual;
+
+    function Clone: TMappingAccess; virtual;
+
+    function GetSize: Integer; virtual; abstract;
+    function GetItem(const AIndexes: PPyObject): PPyObject; virtual; abstract;
+    function SetItem(const AIndexes: PPyObject;
+      const AValue: PPyObject): boolean; virtual; abstract;
+    function DelItem(const AIndexes: PPyObject): boolean; virtual; abstract;
+
+    class function ExpectedMappingClass: TClass; virtual; abstract;
+    class function Name: string; virtual;
+    class function SupportsWrite: boolean; virtual;
+
+    property Mapping: TObject read FMapping;
+    property Wrapper: TPyDelphiWrapper read FWrapper;
+  end;
+  TMappingAccessClass = class of TMappingAccess;
+
+  TPyDelphiMapping = class(TPyObject)
+  private
+    FPyDelphiWrapper: TPyDelphiWrapper;
+    FMappingAccess: TMappingAccess;
+  public
+    destructor Destroy; override;
+
+    class procedure SetupType(PythonType: TPythonType ); override;
+
+    procedure Setup(const APyDelphiWrapper: TPyDelphiWrapper;
+      const AMappingAccess: TMappingAccess);
+
+    function Repr: PPyObject; override;
+    // Mapping services
+    function MpLength: NativeInt; override;
+    function MpSubscript(obj: PPyObject): PPyObject; override;
+    function MpAssSubscript(obj1, obj2: PPyObject): Integer; override;
+
+    property PyDelphiWrapper: TPyDelphiWrapper read FPyDelphiWrapper;
+    property MappingAccess: TMappingAccess read FMappingAccess;
+  end;
+
+  {
     Base class allowing us to implement interfaces.
   }
   TPyInterfacedObject = class(TPyObject, IInterface)
@@ -852,6 +904,7 @@ Type
     FModule : TPythonModule;
     fDefaultIterType: TPythonType;
     fDefaultContainerType: TPythonType;
+    FDefaultMappingType: TPythonType;
     procedure CreateWrappers; virtual;
     procedure CreateModuleVars; virtual;
     procedure CreateModuleFunctions; virtual;
@@ -891,6 +944,7 @@ Type
     // Helper types
     property DefaultContainerType : TPythonType read fDefaultContainerType;
     property DefaultIterType : TPythonType read fDefaultIterType;
+    property DefaultMappingType: TPythonType read FDefaultMappingType;
 {$IFNDEF FPC}
     property DelphiMethodType : TPythonType read fDelphiMethodType;
 {$ENDIF}
@@ -2168,6 +2222,108 @@ begin
   PythonType.GenerateCreateFunction := False;
   PythonType.DocString.Text := 'Iterator for Abstract Containers';
   PythonType.Services.Basic := [bsRepr, bsStr, bsIter, bsIterNext];
+end;
+
+{ TMappingAccess }
+
+constructor TMappingAccess.Create(const AWrapper: TPyDelphiWrapper;
+  const AMapping: TObject);
+begin
+  inherited Create;
+  Assert(Assigned(AWrapper));
+  Assert(Assigned(AMapping));
+  Assert(
+    AMapping.InheritsFrom(ExpectedMappingClass),
+    Format('Class %s expects a mapping of class %s', [
+      ClassName, ExpectedMappingClass.ClassName]));
+  FWrapper := AWrapper;
+  FMapping := AMapping;
+end;
+
+function TMappingAccess.Clone: TMappingAccess;
+begin
+  Result := TMappingAccessClass(ClassType).Create(Wrapper, Mapping);
+end;
+
+class function TMappingAccess.Name: string;
+begin
+  Result := ExpectedMappingClass.ClassName;
+end;
+
+class function TMappingAccess.SupportsWrite: boolean;
+begin
+  Result := false;
+end;
+
+function TMappingAccess.Wrap(const AObj: TObject;
+  const AOwnership: TObjectOwnership): PPyObject;
+begin
+  Result := Wrapper.Wrap(AObj, AOwnership);
+end;
+
+{ TPyDelphiMapping }
+
+destructor TPyDelphiMapping.Destroy;
+begin
+  FMappingAccess.Free;
+  inherited;
+end;
+
+class procedure TPyDelphiMapping.SetupType(PythonType: TPythonType);
+begin
+  inherited;
+  PythonType.Name := 'DefaultMappingType';
+  PythonType.TypeName := 'DelphiDefaultMapping';
+  PythonType.GenerateCreateFunction := False;
+  PythonType.DocString.Text := 'Abstract Mapping type for Delphi';
+  PythonType.Services.Mapping := [msLength, msSubscript, msAssSubscript];
+end;
+
+procedure TPyDelphiMapping.Setup(const APyDelphiWrapper: TPyDelphiWrapper;
+  const AMappingAccess: TMappingAccess);
+begin
+  Assert(Assigned(APyDelphiWrapper));
+  Assert(Assigned(AMappingAccess));
+  FPyDelphiWrapper := APyDelphiWrapper;
+  FMappingAccess := AMappingAccess;
+end;
+
+function TPyDelphiMapping.Repr: PPyObject;
+begin
+  with GetPythonEngine() do
+    Result := PyUnicodeFromString(
+      Format('<Delphi %s at %x>', [MappingAccess.Name, NativeInt(Self)]));
+end;
+
+function TPyDelphiMapping.MpLength: NativeInt;
+begin
+  Result := MappingAccess.GetSize();
+end;
+
+function TPyDelphiMapping.MpSubscript(obj: PPyObject): PPyObject;
+begin
+  Result := MappingAccess.GetItem(obj);
+end;
+
+function TPyDelphiMapping.MpAssSubscript(obj1, obj2: PPyObject): Integer;
+begin
+  if not MappingAccess.SupportsWrite then begin
+    with GetPythonEngine() do
+      PyErr_SetObject(PyExc_SystemError^,
+        PyUnicodeFromString(Format(rs_ErrSqAss, [MappingAccess.Name])));
+      Exit(-1);
+  end;
+
+  if Assigned(obj2) then begin
+    if MappingAccess.SetItem(obj1, obj2) then
+      Result := 0
+    else
+      Result := -1;
+  end else
+    if MappingAccess.DelItem(obj1) then
+      Result := 0
+    else
+      Result := -1;
 end;
 
 { TPyInterfacedObject }
@@ -4356,6 +4512,7 @@ begin
 {$ENDIF}
   fDefaultIterType      := RegisterHelperType(TPyDelphiIterator);
   fDefaultContainerType := RegisterHelperType(TPyDelphiContainer);
+  FDefaultMappingType   := RegisterHelperType(TPyDelphiMapping);
   fVarParamType         := RegisterHelperType(TPyDelphiVarParameter);
 {$IFDEF EXTENDED_RTTI}
   fRecordType           := RegisterHelperType(TPyPascalRecord);
