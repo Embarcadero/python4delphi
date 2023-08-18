@@ -573,11 +573,14 @@ Type
   TExposedMethodImplementation = class;
   TExposedFieldImplementation = class;
   TExposedPropertyImplementation = class;
+  TExposedIndexedPropertyImplementation = class;
 
   TExposedMethodDefCallback = reference to function(const AName: string;
     const AExposedMethod: TExposedMethodImplementation): boolean;
   TExposedPropertyDefCallback = reference to function(const AName: string;
     const AExposedProperty: TExposedPropertyImplementation): boolean;
+  TExposedIndexedPropertyDefCallback = reference to function(const AName: string;
+    const AExposedIndexedProperty: TExposedIndexedPropertyImplementation): boolean;
   TExposedFieldDefCallback = reference to function(const AName: string;
     const AExposedField: TExposedFieldImplementation): boolean;
   {$ENDIF EXPOSE_MEMBERS}
@@ -646,6 +649,12 @@ Type
       const AIncludedPropertyNames: TArray<string> = [];
       const AExcludedPropertyNames: TArray<string> = [];
       const ADefCallback: TExposedPropertyDefCallback = nil); virtual;
+    class procedure ExposeIndexedProperties(const AClass: TClass;
+      const APythonType: TPythonType; const APyDelphiWrapper: TPyDelphiWrapper;
+      const ADeclaredPropertiesOnly: boolean = false;
+      const AIncludedPropertyNames: TArray<string> = [];
+      const AExcludedPropertyNames: TArray<string> = [];
+      const ADefCallback: TExposedIndexedPropertyDefCallback = nil); virtual;
     class procedure ExposeFields(const AClass: TClass;
       const APythonType: TPythonType; const APyDelphiWrapper: TPyDelphiWrapper;
       const ADeclaredFieldsOnly: boolean = false;
@@ -1034,6 +1043,61 @@ Type
   protected
     function GetDocString(): string; override;
   end;
+
+  TExposedIndexedPropertyImplementation = class(TAbstractExposedMemberImplementation)
+  private type
+    TIndexedPropertyAccessClass = class of TIndexedPropertyAccess;
+    TIndexedPropertyAccess = class(TMappingAccess)
+    private
+      FPropertyName: string;
+      FParentType: TRttiType;
+      FPythonType: TPythonType;
+    public
+      function GetSize: Integer; override;
+
+      function GetItem(const AIndexes: PPyObject): PPyObject; override;
+      function SetItem(const AIndexes: PPyObject; const AValue: PPyObject): boolean; override;
+      function DelItem(const AIndexes: PPyObject): boolean; override;
+
+      class function ExpectedMappingClass: TClass; override;
+      class function SupportsWrite: Boolean; override;
+      class function Name: string; override;
+
+      property PropertyName: string read FPropertyName write FPropertyName;
+      property ParentType: TRttiType read FParentType write FParentType;
+      property PythonType: TPythonType read FPythonType write FPythonType;
+    end;
+
+    TIndexedPropertyReadOnlyAccess = class(TIndexedPropertyAccess)
+    public
+      class function SupportsWrite: Boolean; override;
+    end;
+  public type
+    TExposedIndexedPropertyHandler = reference to function(const APyObject: TPyObject; const AContext: Pointer): PPyObject;
+  private
+    FIndexedPropertyHandler: TExposedIndexedPropertyHandler;
+    FImplementation: TMethodImplementation;
+    FRttiType: TRttiType;
+  protected
+    function GetAccessClass: TIndexedPropertyAccessClass; virtual;
+    function GetDocString(): string; override;
+  public
+    constructor Create(AOwner: TComponent; const AName: string;
+      const APyDelphiWrapper: TPyDelphiWrapper; const APythonType: TPythonType;
+      const ARttiType: TRttiType); reintroduce;
+    destructor Destroy(); override;
+
+    function VirtualMethodImplementation(): pointer;
+
+    class function IndexedProperty_Wrapper(const AObj: PPyObject; const AContext : Pointer): PPyObject; static; cdecl;
+
+    property IndexedPropertyHandler: TExposedIndexedPropertyHandler read FIndexedPropertyHandler write FIndexedPropertyHandler;
+  end;
+
+  TExposedIndexedPropertyReadOnlyImplementation = class(TExposedIndexedPropertyImplementation)
+  protected
+    function GetAccessClass: TExposedIndexedPropertyImplementation.TIndexedPropertyAccessClass; override;
+  end;
   {$ENDIF EXPOSE_MEMBERS}
 
   { Singletons }
@@ -1385,6 +1449,220 @@ class function TExposedGetSetImplementation.Set_Wrapper(const AObj,
   AValue: PPyObject; const AContext: Pointer): integer; cdecl;
 begin
   Result := 0;
+end;
+
+{ TExposedIndexedPropertyImplementation }
+
+constructor TExposedIndexedPropertyImplementation.Create(AOwner: TComponent;
+  const AName: string; const APyDelphiWrapper: TPyDelphiWrapper;
+  const APythonType: TPythonType; const ARttiType: TRttiType);
+begin
+  FRttiType := ARttiType;
+  inherited Create(AOwner, AName, APyDelphiWrapper, APythonType);
+  FIndexedPropertyHandler := function(const APyObject: TPyObject; const AContext: Pointer): PPyObject
+    var
+      LAccess: TIndexedPropertyAccess;
+      LMapping: TPyDelphiMapping;
+    begin
+      Result := PyDelphiWrapper.DefaultMappingType.CreateInstance;
+      LAccess := GetAccessClass().Create(
+        Self.PyDelphiWrapper, TPyDelphiObject(APyObject).DelphiObject);
+      LAccess.PropertyName := AName;
+      LAccess.ParentType := ARttiType;
+      LAccess.PythonType := APythonType;
+
+      LMapping := PythonToDelphi(Result) as TPyDelphiMapping;
+      LMapping.Setup(Self.PyDelphiWrapper, LAccess)
+    end;
+end;
+
+destructor TExposedIndexedPropertyImplementation.Destroy;
+begin
+  FImplementation.Free();
+  inherited;
+end;
+
+function TExposedIndexedPropertyImplementation.GetAccessClass: TIndexedPropertyAccessClass;
+begin
+  Result := TIndexedPropertyAccess;
+end;
+
+function TExposedIndexedPropertyImplementation.GetDocString: string;
+begin
+  Result := Format('<Delphi indexed property %s of type %s at %x>', [
+    Name, FRttiType.Name, NativeInt(Self)]);
+end;
+
+class function TExposedIndexedPropertyImplementation.IndexedProperty_Wrapper(
+  const AObj: PPyObject; const AContext : Pointer): PPyObject;
+begin
+  Result := nil;
+end;
+
+function TExposedIndexedPropertyImplementation.VirtualMethodImplementation: pointer;
+var
+  LRttiCtx: TRttiContext;
+begin
+  Assert(not Assigned(FImplementation), 'Only one implementation per instance.');
+
+  LRttiCtx := TRttiContext.Create();
+  try
+    FImplementation := LRttiCtx.GetType(ClassInfo).GetMethod('IndexedProperty_Wrapper')
+      .CreateImplementation(Self,
+        procedure(UserData: Pointer; const Args: TArray<TValue>; out Result: TValue)
+        var
+          Self: TExposedIndexedPropertyImplementation absolute UserData;
+        begin
+          if Assigned(Self.IndexedPropertyHandler) then
+            TValue.Make<PPyObject>(
+              Self.IndexedPropertyHandler(
+                PythonToDelphi(Args[0].AsType<PPyObject>),
+                Args[1].AsType<Pointer>),
+              Result)
+          else
+            TValue.Make<PPyObject>(PPyObject(nil), Result);
+        end);
+    Result := FImplementation.CodeAddress;
+  finally
+    LRttiCtx.Free;
+  end;
+end;
+
+{ TExposedIndexedPropertyImplementation.TIndexedPropertyAccess }
+
+class function TExposedIndexedPropertyImplementation.TIndexedPropertyAccess.ExpectedMappingClass: TClass;
+begin
+  Result := TObject;
+end;
+
+class function TExposedIndexedPropertyImplementation.TIndexedPropertyAccess.SupportsWrite: Boolean;
+begin
+  Result := true;
+end;
+
+class function TExposedIndexedPropertyImplementation.TIndexedPropertyAccess.Name: string;
+begin
+  Result := 'Indexed property';
+end;
+
+function TExposedIndexedPropertyImplementation.TIndexedPropertyAccess.GetSize: Integer;
+begin
+  Result := High(Integer);
+end;
+
+function TExposedIndexedPropertyImplementation.TIndexedPropertyAccess.GetItem(
+  const AIndexes: PPyObject): PPyObject;
+var
+  LProperty: TRttiIndexedProperty;
+  LArgCount: NativeInt;
+  LIndexes: PPyObject;
+begin
+  LProperty := FParentType.GetIndexedProperty(FPropertyName);
+
+  if GetPythonEngine().PyTuple_Check(AIndexes) then begin
+    LArgCount := PythonType.Engine.PyTuple_Size(AIndexes);
+    if LArgCount = 0 then
+      Exit(nil);
+
+    Result := RttiCall(
+      Mapping,
+      Self.PythonType,
+      Self.Wrapper,
+      LProperty.ReadMethod.Name,
+      Self.ParentType as TRttiStructuredType,
+      AIndexes,
+      nil,
+      true);
+  end else begin
+    LIndexes := GetPythonEngine().PyTuple_New(1);
+    try
+      GetPythonEngine().PyTuple_SetItem(LIndexes, 0, AIndexes);
+      Result := RttiCall(
+        Mapping,
+        Self.PythonType,
+        Self.Wrapper,
+        LProperty.ReadMethod.Name,
+        Self.ParentType as TRttiStructuredType,
+        LIndexes,
+        nil,
+        true);
+    finally
+      GetPythonEngine().Py_CLEAR(LIndexes);
+    end;
+  end;
+end;
+
+function TExposedIndexedPropertyImplementation.TIndexedPropertyAccess.SetItem(
+  const AIndexes: PPyObject; const AValue: PPyObject): Boolean;
+var
+  LProperty: TRttiIndexedProperty;
+  LArgCount: NativeInt;
+  I: integer;
+  LIndexes: PPyObject;
+begin
+  LProperty := FParentType.GetIndexedProperty(FPropertyName);
+
+  if GetPythonEngine().PyTuple_Check(AIndexes) then begin
+    LArgCount := PythonType.Engine.PyTuple_Size(AIndexes);
+    LIndexes := GetPythonEngine().PyTuple_New(LArgCount + 1);
+    try
+      for I := 0 to LArgCount - 1 do
+        GetPythonEngine().PyTuple_SetItem(
+          LIndexes, I, GetPythonEngine().PyTuple_GetItem(AIndexes, I));
+
+      GetPythonEngine().PyTuple_SetItem(LIndexes, LArgCount, AValue);
+      RttiCall(
+        Mapping,
+        Self.PythonType,
+        Self.Wrapper,
+        LProperty.WriteMethod.Name,
+        Self.ParentType as TRttiStructuredType,
+        LIndexes,
+        nil,
+        true);
+    finally
+      GetPythonEngine().Py_CLEAR(LIndexes);
+    end;
+  end else begin
+    LIndexes := GetPythonEngine().PyTuple_New(2);
+    try
+      GetPythonEngine().PyTuple_SetItem(LIndexes, 0, AIndexes);
+      GetPythonEngine().PyTuple_SetItem(LIndexes, 1, AValue);
+      RttiCall(
+        Mapping,
+        Self.PythonType,
+        Self.Wrapper,
+        LProperty.WriteMethod.Name,
+        Self.ParentType as TRttiStructuredType,
+        LIndexes,
+        nil,
+        true);
+    finally
+      GetPythonEngine().Py_CLEAR(LIndexes);
+    end;
+  end;
+
+  Result := GetPythonEngine().PyErr_Occurred() = nil;
+end;
+
+function TExposedIndexedPropertyImplementation.TIndexedPropertyAccess.DelItem(
+  const AIndexes: PPyObject): boolean;
+begin
+  Result := false;
+end;
+
+{ TExposedIndexedPropertyImplementation.TIndexedPropertyAccess }
+
+class function TExposedIndexedPropertyImplementation.TIndexedPropertyReadOnlyAccess.SupportsWrite: Boolean;
+begin
+  Result := false;
+end;
+
+{ TExposedIndexedPropertyReadOnlyImplementation }
+
+function TExposedIndexedPropertyReadOnlyImplementation.GetAccessClass: TExposedIndexedPropertyImplementation.TIndexedPropertyAccessClass;
+begin
+  Result := TIndexedPropertyAccess;
 end;
 
 { TExposedFieldImplementation }
@@ -3513,6 +3791,7 @@ begin
     true, [], ['CPP_ABI_1', 'CPP_ABI_2', 'CPP_ABI_3']);
   ExposeFields(DelphiObjectClass, PythonType, PythonType.Owner as TPyDelphiWrapper, true);
   ExposeProperties(DelphiObjectClass, PythonType, PythonType.Owner as TPyDelphiWrapper, true);
+  ExposeIndexedProperties(DelphiObjectClass, PythonType, PythonType.Owner as TPyDelphiWrapper, true);
   {$ENDIF EXPOSE_MEMBERS}
 end;
 
@@ -3700,6 +3979,103 @@ begin
         PAnsiChar(LExposedProperty.Name),
         LExposedProperty.VirtualGetImplementation(),
         LExposedProperty.VirtualSetImplementation(),
+        PAnsiChar(LExposedProperty.DocString),
+        nil);
+    end;
+  finally
+    LRttiCtx.Free;
+  end;
+end;
+
+class procedure TPyDelphiObject.ExposeIndexedProperties(const AClass: TClass;
+      const APythonType: TPythonType; const APyDelphiWrapper: TPyDelphiWrapper;
+      const ADeclaredPropertiesOnly: boolean = false;
+      const AIncludedPropertyNames: TArray<string> = [];
+      const AExcludedPropertyNames: TArray<string> = [];
+      const ADefCallback: TExposedIndexedPropertyDefCallback = nil);
+var
+  LRttiCtx: TRttiContext;
+  LRttiType: TRttiType;
+  LRttiProperties: TArray<TRttiIndexedProperty>;
+  LRttiProperty: TRttiIndexedProperty;
+  LRttiElectedProperties: TArray<TRttiIndexedProperty>;
+  LBuffer: TArray<string>;
+  LExposedProperty: TExposedIndexedPropertyImplementation;
+  LClass: TClass;
+  LDocStr: string;
+begin
+  SetLength(LBuffer, 0);
+  LRttiCtx := TRttiContext.Create();
+  try
+    LRttiType := LRttiCtx.GetType(AClass);
+
+    //Define if we will expose only the declared properties or include all inherited
+    if ADeclaredPropertiesOnly then
+      LRttiProperties := LRttiType.GetDeclaredIndexedProperties()
+    else
+      LRttiProperties := LRttiType.GetIndexedProperties();
+
+    //Expose only the included properties
+    LRttiElectedProperties := TArray<TRttiIndexedProperty>.Create();
+    if Assigned(AIncludedPropertyNames) then begin
+      for LRttiProperty in LRttiProperties do
+        if MatchStr(LRttiProperty.Name, AIncludedPropertyNames) then
+          LRttiElectedProperties := LRttiElectedProperties + [LRttiProperty];
+    end else
+      LRttiElectedProperties := LRttiProperties;
+
+    for LRttiProperty in LRttiElectedProperties do begin
+      //Docs can be located in protected properties
+      if (Ord(LRttiProperty.Visibility) < Ord(TMemberVisibility.mvProtected)) then
+        Continue;
+
+      //Ignores excluded property
+      if MatchStr(LRttiProperty.Name, AExcludedPropertyNames) then
+        Continue;
+
+      //Ignores duplicated properties
+      if MatchStr(LRttiProperty.Name, LBuffer) then
+        Continue;
+
+      //Readable at least
+      if not LRttiProperty.IsReadable then
+        Continue;
+
+      if LRttiProperty.IsWritable then
+        LExposedProperty := TExposedIndexedPropertyImplementation.Create(
+          APythonType, LRttiProperty.Name, APyDelphiWrapper, APythonType, LRttiType)
+      else
+        LExposedProperty := TExposedIndexedPropertyReadOnlyImplementation.Create(
+          APythonType, LRttiProperty.Name, APyDelphiWrapper, APythonType, LRttiType);
+
+      //Give the client code an option to change any def
+      if Assigned(ADefCallback) and not ADefCallback(LRttiProperty.Name, LExposedProperty) then begin
+        //If client code disagrees, we remove the exposed property
+        FreeAndNil(LExposedProperty);
+        //Only register the property to the Python side if we really want to.
+        //In this case, we won't.
+        Continue;
+      end;
+
+      //Feed the buffer
+      SetLength(LBuffer, Length(LBuffer) + 1);
+      LBuffer[Length(LBuffer) - 1] := LRttiProperty.Name;
+
+      //Try to load the property doc string from doc server
+      LClass := DelphiObjectClass;
+      LDocStr := String.Empty;
+      while Assigned(LClass) and LDocStr.IsEmpty() do begin
+        if TPythonDocServer.Instance.ReadMemberDocStr(
+          LClass.ClassInfo, LRttiProperty, LDocStr) then
+            LExposedProperty.DocString := AnsiString(LDocStr);
+        LClass := LClass.ClassParent;
+      end;
+
+      //Adds the Python attribute
+      APythonType.AddGetSet(
+        PAnsiChar(LExposedProperty.Name),
+        LExposedProperty.VirtualMethodImplementation(),
+        nil,
         PAnsiChar(LExposedProperty.DocString),
         nil);
     end;
