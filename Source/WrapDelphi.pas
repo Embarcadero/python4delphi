@@ -1150,6 +1150,7 @@ resourcestring
   rs_ErrCheckObj = '%s receives only Delphi objects';
   rs_ErrSqAss = 'Container %s does not support indexed write (f[i] = x)';
   rs_ErrSqContains = 'Container %s does not support the Contains protocol';
+  rs_ErrMpAssSubscript = 'Mapping %s does not support indexed write (f[i, s] = x)';
   rs_ErrCheckBound = 'Delphi wrapper %s is not bound';
   rs_ErrSequence = 'Wrapper %s does not support sequences';
   rs_ErrInvalidArgs = '"%s" called with invalid arguments.'#$A'Error: %s';
@@ -2588,7 +2589,7 @@ begin
   if not MappingAccess.SupportsWrite then begin
     with GetPythonEngine() do
       PyErr_SetObject(PyExc_SystemError^,
-        PyUnicodeFromString(Format(rs_ErrSqAss, [MappingAccess.Name])));
+        PyUnicodeFromString(Format(rs_ErrMpAssSubscript, [MappingAccess.Name])));
       Exit(-1);
   end;
 
