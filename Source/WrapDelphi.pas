@@ -1663,7 +1663,7 @@ end;
 
 function TExposedIndexedPropertyReadOnlyImplementation.GetAccessClass: TExposedIndexedPropertyImplementation.TIndexedPropertyAccessClass;
 begin
-  Result := TIndexedPropertyAccess;
+  Result := TIndexedPropertyReadOnlyAccess;
 end;
 
 { TExposedFieldImplementation }
