@@ -124,6 +124,25 @@ type
     property DelphiObject: TCustomControl read GetDelphiObject write SetDelphiObject;
   end;
 
+  TPyDelphiCustomListControl = class (TPyDelphiWinControl)
+  private
+    function GetDelphiObject: TCustomListControl;
+    procedure SetDelphiObject(const Value: TCustomListControl);
+  protected
+  public
+    class function DelphiObjectClass : TClass; override;
+    property DelphiObject: TCustomListControl read GetDelphiObject write SetDelphiObject;
+  end;
+
+  TPyDelphiCustomMultiListControl = class (TPyDelphiCustomListControl)
+  private
+    function GetDelphiObject: TCustomMultiSelectListControl;
+    procedure SetDelphiObject(const Value: TCustomMultiSelectListControl);
+  protected
+  public
+    class function DelphiObjectClass : TClass; override;
+    property DelphiObject: TCustomMultiSelectListControl read GetDelphiObject write SetDelphiObject;
+  end;
 
   { TKeyPressEvent wrapper }
   TKeyPressEventHandler = class(TEventHandler)
@@ -209,6 +228,8 @@ begin
   APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiControl);
   APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiWinControl);
   APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiCustomControl);
+  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiCustomListControl);
+  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiCustomMultiListControl);
 
   APyDelphiWrapper.EventHandlers.RegisterHandler(TKeyPressEventHandler);
   APyDelphiWrapper.EventHandlers.RegisterHandler(TKeyEventHandler);
@@ -865,6 +886,42 @@ end;
 class function TMouseMoveEventHandler.GetTypeInfo: PTypeInfo;
 begin
   Result := System.TypeInfo(TMouseMoveEvent);
+end;
+
+{ TPyDelphiCustomListControl }
+
+class function TPyDelphiCustomListControl.DelphiObjectClass: TClass;
+begin
+  Result := TCustomListControl;
+end;
+
+function TPyDelphiCustomListControl.GetDelphiObject: TCustomListControl;
+begin
+  Result := TCustomListControl(inherited DelphiObject);
+end;
+
+procedure TPyDelphiCustomListControl.SetDelphiObject(
+  const Value: TCustomListControl);
+begin
+  inherited DelphiObject := Value;
+end;
+
+{ TPyDelphiCustomMultiListControl }
+
+class function TPyDelphiCustomMultiListControl.DelphiObjectClass: TClass;
+begin
+  Result := TCustomMultiSelectListControl;
+end;
+
+function TPyDelphiCustomMultiListControl.GetDelphiObject: TCustomMultiSelectListControl;
+begin
+  Result := TCustomMultiSelectListControl(inherited DelphiObject);
+end;
+
+procedure TPyDelphiCustomMultiListControl.SetDelphiObject(
+  const Value: TCustomMultiSelectListControl);
+begin
+  inherited DelphiObject := Value;
 end;
 
 initialization

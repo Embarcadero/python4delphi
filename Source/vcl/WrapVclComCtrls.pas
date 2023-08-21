@@ -195,6 +195,42 @@ type
     property DelphiObject: TStatusBar read GetDelphiObject write SetDelphiObject;
   end;
 
+  TPyDelphiCustomTreeView = class (TPyDelphiWinControl)
+  private
+    function GetDelphiObject: TCustomTreeView;
+    procedure SetDelphiObject(const Value: TCustomTreeView);
+  public
+    class function DelphiObjectClass : TClass; override;
+    property DelphiObject: TCustomTreeView read GetDelphiObject write SetDelphiObject;
+  end;
+
+  TPyDelphiTreeView = class (TPyDelphiCustomTreeView)
+  private
+    function GetDelphiObject: TTreeView;
+    procedure SetDelphiObject(const Value: TTreeView);
+  public
+    class function DelphiObjectClass : TClass; override;
+    property DelphiObject: TTreeView read GetDelphiObject write SetDelphiObject;
+  end;
+
+  TPyDelphiCustomListView = class (TPyDelphiCustomMultiListControl)
+  private
+    function GetDelphiObject: TCustomListView;
+    procedure SetDelphiObject(const Value: TCustomListView);
+  public
+    class function DelphiObjectClass : TClass; override;
+    property DelphiObject: TCustomListView read GetDelphiObject write SetDelphiObject;
+  end;
+
+  TPyDelphiListView = class (TPyDelphiCustomListView)
+  private
+    function GetDelphiObject: TListView;
+    procedure SetDelphiObject(const Value: TListView);
+  public
+    class function DelphiObjectClass : TClass; override;
+    property DelphiObject: TListView read GetDelphiObject write SetDelphiObject;
+  end;
+
 implementation
 
 uses
@@ -237,6 +273,10 @@ begin
   APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiCustomTabControl);
   APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiCustomStatusBar);
   APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiStatusBar);
+  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiCustomTreeView);
+  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiTreeView);
+  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiCustomListView);
+  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiListView);
 
   APyDelphiWrapper.EventHandlers.RegisterHandler(TTabChangingEventHandler);
 end;
@@ -916,9 +956,78 @@ begin
   inherited DelphiObject := Value;
 end;
 
+{ TPyDelphiCustomTreeView }
+
+class function TPyDelphiCustomTreeView.DelphiObjectClass: TClass;
+begin
+  Result := TCustomTreeView;
+end;
+
+function TPyDelphiCustomTreeView.GetDelphiObject: TCustomTreeView;
+begin
+  Result := TCustomTreeView(inherited DelphiObject);
+end;
+
+procedure TPyDelphiCustomTreeView.SetDelphiObject(const Value: TCustomTreeView);
+begin
+  inherited DelphiObject := Value;
+end;
+
+{ TPyDelphiTreeView }
+
+class function TPyDelphiTreeView.DelphiObjectClass: TClass;
+begin
+  Result := TTreeView;
+end;
+
+function TPyDelphiTreeView.GetDelphiObject: TTreeView;
+begin
+  Result := TTreeView(inherited DelphiObject);
+end;
+
+procedure TPyDelphiTreeView.SetDelphiObject(const Value: TTreeView);
+begin
+  inherited DelphiObject := Value;
+end;
+
+{ TPyDelphiCustomListView }
+
+class function TPyDelphiCustomListView.DelphiObjectClass: TClass;
+begin
+  Result := TCustomListView;
+end;
+
+function TPyDelphiCustomListView.GetDelphiObject: TCustomListView;
+begin
+  Result := TCustomListView(inherited DelphiObject);
+end;
+
+procedure TPyDelphiCustomListView.SetDelphiObject(const Value: TCustomListView);
+begin
+  inherited DelphiObject := Value;
+end;
+
+{ TPyDelphiListView }
+
+class function TPyDelphiListView.DelphiObjectClass: TClass;
+begin
+  Result := TListView;
+end;
+
+function TPyDelphiListView.GetDelphiObject: TListView;
+begin
+  Result := TListView(inherited DelphiObject);
+end;
+
+procedure TPyDelphiListView.SetDelphiObject(const Value: TListView);
+begin
+  inherited DelphiObject := Value;
+end;
+
 initialization
   RegisteredUnits.Add( TComCtrlsRegistration.Create );
   {$IFNDEF FPC}
   System.Classes.RegisterClasses([TDateTimePicker]);
   {$ENDIF FPC}
+
 end.
