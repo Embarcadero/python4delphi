@@ -1118,6 +1118,7 @@ Type
   function  CheckEnum(const AEnumName : string; AValue, AMinValue, AMaxValue : Integer) : Boolean;
   function  CreateVarParam(PyDelphiWrapper : TPyDelphiWrapper; const AValue : Variant) : PPyObject; overload;
   function  CreateVarParam(PyDelphiWrapper : TPyDelphiWrapper; AObject: TObject) : PPyObject; overload;
+  function  CreateVarParam(const PyDelphiWrapper: TPyDelphiWrapper; const AClass: TClass): PPyObject; overload;
   function  SetToPython(ATypeInfo: PTypeInfo; AValue : Integer) : PPyObject; overload;
   function  SetToPython(APropInfo: PPropInfo; AValue : Integer) : PPyObject; overload;
   function  SetToPython(AInstance: TObject; APropInfo: PPropInfo) : PPyObject; overload;
@@ -2112,6 +2113,16 @@ begin
   tmp := PyDelphiWrapper.Wrap(AObject);
   (PythonToDelphi(Result) as TPyDelphiVarParameter).Value := tmp;
   GetPythonEngine.Py_DECREF(tmp);
+end;
+
+function CreateVarParam(const PyDelphiWrapper: TPyDelphiWrapper; const AClass: TClass): PPyObject; overload;
+var
+  LTmp: PPyObject;
+begin
+  Result := PyDelphiWrapper.VarParamType.CreateInstance;
+  LTmp := PyDelphiWrapper.WrapClass(AClass);
+  (PythonToDelphi(Result) as TPyDelphiVarParameter).Value := LTmp;
+  GetPythonEngine.Py_DECREF(LTmp);
 end;
 
 function SupportsFreeNotification(AObject : TObject) : Boolean;
