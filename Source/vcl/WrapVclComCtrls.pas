@@ -20,9 +20,9 @@ type
   protected
     procedure DoEvent(Sender: TObject; var AllowChange: Boolean);
   public
-    constructor Create(PyDelphiWrapper : TPyDelphiWrapper; Component : TObject;
-      PropertyInfo : PPropInfo; Callable : PPyObject); override;
-    class function GetTypeInfo : PTypeInfo; override;
+    constructor Create(PyDelphiWrapper: TPyDelphiWrapper; Component: TObject;
+      PropertyInfo: PPropInfo; Callable: PPyObject); override;
+    class function GetTypeInfo: PTypeInfo; override;
   end;
 
   {$IFNDEF FPC}
@@ -31,7 +31,7 @@ type
     function  GetDelphiObject: TDateTimePicker;
     procedure SetDelphiObject(const Value: TDateTimePicker);
   public
-    class function  DelphiObjectClass : TClass; override;
+    class function  DelphiObjectClass: TClass; override;
     // Properties
     property DelphiObject: TDateTimePicker read GetDelphiObject write SetDelphiObject;
   end;
@@ -43,13 +43,13 @@ type
     procedure SetDelphiObject(const Value: TTabSheet);
   protected
     // Property Getters
-    function Get_TabIndex( AContext : Pointer) : PPyObject; cdecl;
-    function Get_PageControl( AContext : Pointer) : PPyObject; cdecl;
+    function Get_TabIndex( AContext: Pointer): PPyObject; cdecl;
+    function Get_PageControl( AContext: Pointer): PPyObject; cdecl;
     // Property Setters
-    function Set_PageControl( AValue : PPyObject; AContext : Pointer) : integer; cdecl;
+    function Set_PageControl( AValue: PPyObject; AContext: Pointer): integer; cdecl;
   public
-    class function  DelphiObjectClass : TClass; override;
-    class procedure RegisterGetSets( PythonType : TPythonType ); override;
+    class function  DelphiObjectClass: TClass; override;
+    class procedure RegisterGetSets( PythonType: TPythonType ); override;
     // Properties
     property DelphiObject: TTabSheet read GetDelphiObject write SetDelphiObject;
   end;
@@ -61,15 +61,15 @@ type
   private
     function GetContainer: TPageControl;
   public
-    function GetItem(AIndex : Integer) : PPyObject; override;
-    function GetSize : Integer; override;
-    function IndexOf(AValue : PPyObject) : Integer; override;
+    function GetItem(AIndex: Integer): PPyObject; override;
+    function GetSize: Integer; override;
+    function IndexOf(AValue: PPyObject): Integer; override;
 
-    class function ExpectedContainerClass : TClass; override;
-    class function SupportsIndexOf : Boolean; override;
-    class function Name : string; override;
+    class function ExpectedContainerClass: TClass; override;
+    class function SupportsIndexOf: Boolean; override;
+    class function Name: string; override;
 
-    property Container : TPageControl read GetContainer;
+    property Container: TPageControl read GetContainer;
   end;
 
   TPyDelphiPageControl = class (TPyDelphiWinControl)
@@ -79,33 +79,33 @@ type
   protected
     // methods
     {$IFNDEF FPC}
-    function  IndexOfTabAt_Wrapper(args : PPyObject) : PPyObject; cdecl;
-    function  GetHitTestInfoAt_Wrapper(args : PPyObject) : PPyObject; cdecl;
+    function  IndexOfTabAt_Wrapper(args: PPyObject): PPyObject; cdecl;
+    function  GetHitTestInfoAt_Wrapper(args: PPyObject): PPyObject; cdecl;
     {$ENDIF FPC}
-    function  TabRect_Wrapper(args : PPyObject) : PPyObject; cdecl;
+    function  TabRect_Wrapper(args: PPyObject): PPyObject; cdecl;
     {$IFNDEF FPC}
-    function  ScrollTabs_Wrapper(args : PPyObject) : PPyObject; cdecl;
+    function  ScrollTabs_Wrapper(args: PPyObject): PPyObject; cdecl;
     {$ENDIF FPC}
-    function  FindNextPage_Wrapper(args : PPyObject) : PPyObject; cdecl;
-    function  SelectNextPage_Wrapper(args : PPyObject) : PPyObject; cdecl;
+    function  FindNextPage_Wrapper(args: PPyObject): PPyObject; cdecl;
+    function  SelectNextPage_Wrapper(args: PPyObject): PPyObject; cdecl;
     // Property Getters
-    function Get_ActivePage( AContext : Pointer) : PPyObject; cdecl;
-    function Get_ActivePageIndex( AContext : Pointer) : PPyObject; cdecl;
+    function Get_ActivePage( AContext: Pointer): PPyObject; cdecl;
+    function Get_ActivePageIndex( AContext: Pointer): PPyObject; cdecl;
     {$IFNDEF FPC}
-    function Get_Canvas( AContext : Pointer) : PPyObject; cdecl;
+    function Get_Canvas( AContext: Pointer): PPyObject; cdecl;
     {$ENDIF FPC}
-    function Get_PageCount( AContext : Pointer) : PPyObject; cdecl;
-    function Get_Pages( AContext : Pointer) : PPyObject; cdecl;
+    function Get_PageCount( AContext: Pointer): PPyObject; cdecl;
+    function Get_Pages( AContext: Pointer): PPyObject; cdecl;
     {$IFNDEF FPC}
-    function Get_RowCount( AContext : Pointer) : PPyObject; cdecl;
+    function Get_RowCount( AContext: Pointer): PPyObject; cdecl;
     {$ENDIF FPC}
     // Property Setters
-    function Set_ActivePage( AValue : PPyObject; AContext : Pointer) : integer; cdecl;
-    function Set_ActivePageIndex( AValue : PPyObject; AContext : Pointer) : integer; cdecl;
+    function Set_ActivePage( AValue: PPyObject; AContext: Pointer): integer; cdecl;
+    function Set_ActivePageIndex( AValue: PPyObject; AContext: Pointer): integer; cdecl;
   public
-    class function  DelphiObjectClass : TClass; override;
-    class procedure RegisterGetSets( PythonType : TPythonType ); override;
-    class procedure RegisterMethods( PythonType : TPythonType ); override;
+    class function  DelphiObjectClass: TClass; override;
+    class procedure RegisterGetSets( PythonType: TPythonType ); override;
+    class procedure RegisterMethods( PythonType: TPythonType ); override;
     // Properties
     property DelphiObject: TPageControl read GetDelphiObject write SetDelphiObject;
   end;
@@ -115,7 +115,7 @@ type
     function GetDelphiObject: TTrackBar;
     procedure SetDelphiObject(const Value: TTrackBar);
   public
-    class function DelphiObjectClass : TClass; override;
+    class function DelphiObjectClass: TClass; override;
     // Properties
     property DelphiObject: TTrackBar read GetDelphiObject write SetDelphiObject;
   end;
@@ -164,7 +164,7 @@ type
     function GetDelphiObject: TCustomTabControl;
     procedure SetDelphiObject(const Value: TCustomTabControl);
   public
-    class function DelphiObjectClass : TClass; override;
+    class function DelphiObjectClass: TClass; override;
     property DelphiObject: TCustomTabControl read GetDelphiObject write SetDelphiObject;
   end;
 
@@ -173,7 +173,7 @@ type
     function GetDelphiObject: TTabControl;
     procedure SetDelphiObject(const Value: TTabControl);
   public
-    class function DelphiObjectClass : TClass; override;
+    class function DelphiObjectClass: TClass; override;
     property DelphiObject: TTabControl read GetDelphiObject write SetDelphiObject;
   end;
 
@@ -182,7 +182,7 @@ type
     function GetDelphiObject: TCustomStatusBar;
     procedure SetDelphiObject(const Value: TCustomStatusBar);
   public
-    class function DelphiObjectClass : TClass; override;
+    class function DelphiObjectClass: TClass; override;
     property DelphiObject: TCustomStatusBar read GetDelphiObject write SetDelphiObject;
   end;
 
@@ -191,45 +191,239 @@ type
     function GetDelphiObject: TStatusBar;
     procedure SetDelphiObject(const Value: TStatusBar);
   public
-    class function DelphiObjectClass : TClass; override;
+    class function DelphiObjectClass: TClass; override;
     property DelphiObject: TStatusBar read GetDelphiObject write SetDelphiObject;
   end;
 
-  TPyDelphiCustomTreeView = class (TPyDelphiWinControl)
+  //TTVChangingEvent
+  TTVChangingEventHandler = class(TEventHandler)
+  protected
+    procedure DoEvent(Sender: TObject; Node: TTreeNode; var AllowChange: Boolean);
+  public
+    constructor Create(PyDelphiWrapper: TPyDelphiWrapper; Component: TObject;
+      PropertyInfo: PPropInfo; Callable: PPyObject); override;
+
+    class function GetTypeInfo: PTypeInfo; override;
+  end;
+
+  //TTVChangedEvent
+  TTVChangedEventHandler = class(TEventHandler)
+  protected
+    procedure DoEvent(Sender: TObject; Node: TTreeNode);
+  public
+    constructor Create(PyDelphiWrapper: TPyDelphiWrapper; Component: TObject;
+      PropertyInfo: PPropInfo; Callable: PPyObject); override;
+
+    class function GetTypeInfo: PTypeInfo; override;
+  end;
+
+  //TTVEditingEvent
+  TTVEditingEventHandler = class(TEventHandler)
+  protected
+    procedure DoEvent(Sender: TObject; Node: TTreeNode; var AllowEdit: Boolean);
+  public
+    constructor Create(PyDelphiWrapper: TPyDelphiWrapper; Component: TObject;
+      PropertyInfo: PPropInfo; Callable: PPyObject); override;
+
+    class function GetTypeInfo: PTypeInfo; override;
+  end;
+
+  //TTVEditedEvent
+  TTVEditedEventHandler = class(TEventHandler)
+  protected
+    procedure DoEvent(Sender: TObject; Node: TTreeNode; var S: string);
+  public
+    constructor Create(PyDelphiWrapper: TPyDelphiWrapper; Component: TObject;
+      PropertyInfo: PPropInfo; Callable: PPyObject); override;
+
+    class function GetTypeInfo: PTypeInfo; override;
+  end;
+
+  //TTVExpandingEvent
+  TTVExpandingEventHandler = class(TEventHandler)
+  protected
+    procedure DoEvent(Sender: TObject; Node: TTreeNode; var AllowExpansion: Boolean);
+  public
+    constructor Create(PyDelphiWrapper: TPyDelphiWrapper; Component: TObject;
+      PropertyInfo: PPropInfo; Callable: PPyObject); override;
+
+    class function GetTypeInfo: PTypeInfo; override;
+  end;
+
+  //TTVCollapsingEvent
+  TTVCollapsingEventHandler = class(TEventHandler)
+  protected
+    procedure DoEvent(Sender: TObject; Node: TTreeNode; var AllowCollapse: Boolean);
+  public
+    constructor Create(PyDelphiWrapper: TPyDelphiWrapper; Component: TObject;
+      PropertyInfo: PPropInfo; Callable: PPyObject); override;
+
+    class function GetTypeInfo: PTypeInfo; override;
+  end;
+
+  //TTVExpandedEvent
+  TTVExpandedEventHandler = class(TEventHandler)
+  protected
+    procedure DoEvent(Sender: TObject; Node: TTreeNode);
+  public
+    constructor Create(PyDelphiWrapper: TPyDelphiWrapper; Component: TObject;
+      PropertyInfo: PPropInfo; Callable: PPyObject); override;
+
+    class function GetTypeInfo: PTypeInfo; override;
+  end;
+
+  //TTVCompareEvent
+  TTVCompareEventHandler = class(TEventHandler)
+  protected
+    procedure DoEvent(Sender: TObject; Node1, Node2: TTreeNode; Data: Integer; var Compare: Integer);
+  public
+    constructor Create(PyDelphiWrapper: TPyDelphiWrapper; Component: TObject;
+      PropertyInfo: PPropInfo; Callable: PPyObject); override;
+
+    class function GetTypeInfo: PTypeInfo; override;
+  end;
+
+  //TTVHintEvent
+  TTVHintEventHandler = class(TEventHandler)
+  protected
+    procedure DoEvent(Sender: TObject; const Node: TTreeNode; var Hint: String);
+  public
+    constructor Create(PyDelphiWrapper: TPyDelphiWrapper; Component: TObject;
+      PropertyInfo: PPropInfo; Callable: PPyObject); override;
+
+    class function GetTypeInfo: PTypeInfo; override;
+  end;
+
+  //TTVCustomDrawEvent
+  TTVCustomDrawEventHandler = class(TEventHandler)
+  protected
+    procedure DoEvent(Sender: TCustomTreeView; const ARect: TRect; var DefaultDraw: Boolean);
+  public
+    constructor Create(PyDelphiWrapper: TPyDelphiWrapper; Component: TObject;
+      PropertyInfo: PPropInfo; Callable: PPyObject); override;
+
+    class function GetTypeInfo: PTypeInfo; override;
+  end;
+
+  //TTVCustomDrawItemEvent
+  TTVCustomDrawItemEventHandler = class(TEventHandler)
+  protected
+    procedure DoEvent(Sender: TCustomTreeView; Node: TTreeNode; State: TCustomDrawState;
+      var DefaultDraw: Boolean);
+  public
+    constructor Create(PyDelphiWrapper: TPyDelphiWrapper; Component: TObject;
+      PropertyInfo: PPropInfo; Callable: PPyObject); override;
+
+    class function GetTypeInfo: PTypeInfo; override;
+  end;
+
+  //TTVAdvancedCustomDrawEvent
+  TTVAdvancedCustomDrawEventHandler = class(TEventHandler)
+  protected
+    procedure DoEvent(Sender: TCustomTreeView; const ARect: TRect; Stage: TCustomDrawStage;
+      var DefaultDraw: Boolean);
+  public
+    constructor Create(PyDelphiWrapper: TPyDelphiWrapper; Component: TObject;
+      PropertyInfo: PPropInfo; Callable: PPyObject); override;
+
+    class function GetTypeInfo: PTypeInfo; override;
+  end;
+
+  //TTVAdvancedCustomDrawItemEvent
+  TTVAdvancedCustomDrawItemEventHandler = class(TEventHandler)
+  protected
+    procedure DoEvent(Sender: TCustomTreeView; Node: TTreeNode; State: TCustomDrawState;
+      Stage: TCustomDrawStage; var PaintImages, DefaultDraw: Boolean);
+  public
+    constructor Create(PyDelphiWrapper: TPyDelphiWrapper; Component: TObject;
+      PropertyInfo: PPropInfo; Callable: PPyObject); override;
+
+    class function GetTypeInfo: PTypeInfo; override;
+  end;
+
+  //TTVCreateNodeClassEvent
+  TTVCreateNodeClassEventHandler = class(TEventHandler)
+  protected
+    procedure DoEvent(Sender: TCustomTreeView; var NodeClass: TTreeNodeClass);
+  public
+    constructor Create(PyDelphiWrapper: TPyDelphiWrapper; Component: TObject;
+      PropertyInfo: PPropInfo; Callable: PPyObject); override;
+
+    class function GetTypeInfo: PTypeInfo; override;
+  end;
+
+  //TTVCheckStateChangedEvent
+  TTVCheckStateChangedEventHandler = class(TEventHandler)
+  protected
+    procedure DoEvent(Sender: TCustomTreeView; Node: TTreeNode; CheckState: TNodeCheckState);
+  public
+    constructor Create(PyDelphiWrapper: TPyDelphiWrapper; Component: TObject;
+      PropertyInfo: PPropInfo; Callable: PPyObject); override;
+
+    class function GetTypeInfo: PTypeInfo; override;
+  end;
+
+  //TTVCheckStateChangingEvent
+  TTVCheckStateChangingEventHandler = class(TEventHandler)
+  protected
+    procedure DoEvent(Sender: TCustomTreeView; Node: TTreeNode;
+      NewCheckState, OldCheckState: TNodeCheckState; var AllowChange: Boolean);
+  public
+    constructor Create(PyDelphiWrapper: TPyDelphiWrapper; Component: TObject;
+      PropertyInfo: PPropInfo; Callable: PPyObject); override;
+
+    class function GetTypeInfo: PTypeInfo; override;
+  end;
+
+  TPyDelphiTreeNode = class(TPyDelphiPersistent)
+  private
+    function GetDelphiObject: TTreeNode;
+    procedure SetDelphiObject(const Value: TTreeNode);
+  public
+    class function DelphiObjectClass: TClass; override;
+    property DelphiObject: TTreeNode read GetDelphiObject write SetDelphiObject;
+  end;
+
+  TPyDelphiCustomTreeView = class(TPyDelphiWinControl)
   private
     function GetDelphiObject: TCustomTreeView;
     procedure SetDelphiObject(const Value: TCustomTreeView);
   public
-    class function DelphiObjectClass : TClass; override;
+    class function DelphiObjectClass: TClass; override;
     property DelphiObject: TCustomTreeView read GetDelphiObject write SetDelphiObject;
   end;
 
-  TPyDelphiTreeView = class (TPyDelphiCustomTreeView)
+  TPyDelphiTreeView = class(TPyDelphiCustomTreeView)
   private
     function GetDelphiObject: TTreeView;
     procedure SetDelphiObject(const Value: TTreeView);
   public
-    class function DelphiObjectClass : TClass; override;
+    class function DelphiObjectClass: TClass; override;
     property DelphiObject: TTreeView read GetDelphiObject write SetDelphiObject;
   end;
 
-  TPyDelphiCustomListView = class (TPyDelphiCustomMultiListControl)
+  TPyDelphiCustomListView = class(TPyDelphiCustomMultiListControl)
   private
     function GetDelphiObject: TCustomListView;
     procedure SetDelphiObject(const Value: TCustomListView);
   public
-    class function DelphiObjectClass : TClass; override;
+    class function DelphiObjectClass: TClass; override;
     property DelphiObject: TCustomListView read GetDelphiObject write SetDelphiObject;
   end;
 
-  TPyDelphiListView = class (TPyDelphiCustomListView)
+  TPyDelphiListView = class(TPyDelphiCustomListView)
   private
     function GetDelphiObject: TListView;
     procedure SetDelphiObject(const Value: TListView);
   public
-    class function DelphiObjectClass : TClass; override;
+    class function DelphiObjectClass: TClass; override;
     property DelphiObject: TListView read GetDelphiObject write SetDelphiObject;
   end;
+
+  function NodeCheckStateToPython(const ANodeCheckState: TNodeCheckState): PPyObject;
+  function CustomDrawTargetToPython(const ACustomDrawTarget: TCustomDrawTarget): PPyObject;
+  function CustomDrawStageToPython(const ACustomDrawStage: TCustomDrawStage): PPyObject;
+  function CustomDrawStateToPython(const ACustomDrawState: TCustomDrawState): PPyObject;
 
 implementation
 
@@ -241,10 +435,55 @@ uses
 type
   TComCtrlsRegistration = class(TRegisteredUnit)
   public
-    function Name : string; override;
-    procedure RegisterWrappers(APyDelphiWrapper : TPyDelphiWrapper); override;
-    procedure DefineVars(APyDelphiWrapper : TPyDelphiWrapper); override;
+    function Name: string; override;
+    procedure RegisterWrappers(APyDelphiWrapper: TPyDelphiWrapper); override;
+    procedure DefineVars(APyDelphiWrapper: TPyDelphiWrapper); override;
   end;
+
+function NodeCheckStateToPython(const ANodeCheckState: TNodeCheckState): PPyObject;
+begin
+  Result := GetPythonEngine().PyUnicodeFromString(
+    System.TypInfo.GetEnumName(
+      TypeInfo(TNodeCheckState),
+      Ord(ANodeCheckState)));
+end;
+
+function CustomDrawTargetToPython(const ACustomDrawTarget: TCustomDrawTarget): PPyObject;
+begin
+  Result := GetPythonEngine().PyUnicodeFromString(
+    System.TypInfo.GetEnumName(
+      TypeInfo(TCustomDrawTarget),
+      Ord(ACustomDrawTarget)));
+end;
+
+function CustomDrawStageToPython(const ACustomDrawStage: TCustomDrawStage): PPyObject;
+begin
+  Result := GetPythonEngine().PyUnicodeFromString(
+    System.TypInfo.GetEnumName(
+      TypeInfo(TCustomDrawStage),
+      Ord(ACustomDrawStage)));
+end;
+
+function CustomDrawStateToPython(const ACustomDrawState: TCustomDrawState): PPyObject;
+
+  procedure Append(const AList: PPyObject; const AString: string);
+  var
+    LItem: PPyObject;
+  begin
+    with GetPythonEngine do begin
+      LItem := PyUnicodeFromString(AString);
+      PyList_Append(AList, LItem);
+      Py_XDecRef(LItem);
+    end;
+  end;
+
+var
+  LState: integer;
+begin
+  Result := GetPythonEngine().PyList_New(0);
+  for LState := Ord(cdsSelected) to Ord(cdsDropHilited) do
+    Append(Result, System.TypInfo.GetEnumName(TypeInfo(TCustomDrawState), LState));
+end;
 
 { TComCtrlsRegistration }
 
@@ -273,15 +512,33 @@ begin
   APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiCustomTabControl);
   APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiCustomStatusBar);
   APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiStatusBar);
+  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiTreeNode);
   APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiCustomTreeView);
   APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiTreeView);
   APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiCustomListView);
   APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiListView);
 
   APyDelphiWrapper.EventHandlers.RegisterHandler(TTabChangingEventHandler);
+  APyDelphiWrapper.EventHandlers.RegisterHandler(TTVChangingEventHandler);
+  APyDelphiWrapper.EventHandlers.RegisterHandler(TTVChangedEventHandler);
+  APyDelphiWrapper.EventHandlers.RegisterHandler(TTVEditingEventHandler);
+  APyDelphiWrapper.EventHandlers.RegisterHandler(TTVEditedEventHandler);
+  APyDelphiWrapper.EventHandlers.RegisterHandler(TTVExpandingEventHandler);
+  APyDelphiWrapper.EventHandlers.RegisterHandler(TTVCollapsingEventHandler);
+  APyDelphiWrapper.EventHandlers.RegisterHandler(TTVExpandedEventHandler);
+  APyDelphiWrapper.EventHandlers.RegisterHandler(TTVCompareEventHandler);
+  APyDelphiWrapper.EventHandlers.RegisterHandler(TTVHintEventHandler);
+  APyDelphiWrapper.EventHandlers.RegisterHandler(TTVCustomDrawEventHandler);
+  APyDelphiWrapper.EventHandlers.RegisterHandler(TTVCustomDrawItemEventHandler);
+  APyDelphiWrapper.EventHandlers.RegisterHandler(TTVAdvancedCustomDrawEventHandler);
+  APyDelphiWrapper.EventHandlers.RegisterHandler(TTVAdvancedCustomDrawItemEventHandler);
+  APyDelphiWrapper.EventHandlers.RegisterHandler(TTVCreateNodeClassEventHandler);
+  APyDelphiWrapper.EventHandlers.RegisterHandler(TTVCheckStateChangedEventHandler);
+  APyDelphiWrapper.EventHandlers.RegisterHandler(TTVCheckStateChangingEventHandler);
 end;
 
 {$IFNDEF FPC}
+
 { TPyDelphiDateTimePicker }
 
 class function TPyDelphiDateTimePicker.DelphiObjectClass: TClass;
@@ -956,6 +1213,23 @@ begin
   inherited DelphiObject := Value;
 end;
 
+{ TPyDelphiTreeNode }
+
+class function TPyDelphiTreeNode.DelphiObjectClass: TClass;
+begin
+  Result := TTreeNode;
+end;
+
+function TPyDelphiTreeNode.GetDelphiObject: TTreeNode;
+begin
+  Result := TTreeNode(inherited DelphiObject);
+end;
+
+procedure TPyDelphiTreeNode.SetDelphiObject(const Value: TTreeNode);
+begin
+  inherited DelphiObject := Value;
+end;
+
 { TPyDelphiCustomTreeView }
 
 class function TPyDelphiCustomTreeView.DelphiObjectClass: TClass;
@@ -1022,6 +1296,770 @@ end;
 procedure TPyDelphiListView.SetDelphiObject(const Value: TListView);
 begin
   inherited DelphiObject := Value;
+end;
+
+{ TTVChangingEventHandler }
+
+constructor TTVChangingEventHandler.Create(PyDelphiWrapper: TPyDelphiWrapper;
+  Component: TObject; PropertyInfo: PPropInfo; Callable: PPyObject);
+var
+  Method : TMethod;
+begin
+  inherited;
+  Method.Code := @TTVChangingEventHandler.DoEvent;
+  Method.Data := Self;
+  SetMethodProp(Component, PropertyInfo, Method);
+end;
+
+class function TTVChangingEventHandler.GetTypeInfo: PTypeInfo;
+begin
+  Result := System.TypeInfo(TTVChangingEvent);
+end;
+
+procedure TTVChangingEventHandler.DoEvent(Sender: TObject; Node: TTreeNode;
+  var AllowChange: Boolean);
+var
+  LPyObject, LPyNode, LPyTuple, LPyResult, LPyAllowChange: PPyObject;
+  LVarParam: TPyDelphiVarParameter;
+begin
+  Assert(Assigned(PyDelphiWrapper));
+  if Assigned(Callable) and PythonOK() then
+    with GetPythonEngine() do begin
+      LPyObject := PyDelphiWrapper.Wrap(Sender);
+      LPyNode := PyDelphiWrapper.Wrap(Node);
+      LPyAllowChange := CreateVarParam(PyDelphiWrapper, AllowChange);
+      LVarParam := PythonToDelphi(LPyAllowChange) as TPyDelphiVarParameter;
+      LPyTuple := PyTuple_New(3);
+      PyTuple_SetItem(LPyTuple, 0, LPyObject);
+      PyTuple_SetItem(LPyTuple, 1, LPyNode);
+      PyTuple_SetItem(LPyTuple, 2, LPyAllowChange);
+      try
+        LPyResult := PyObject_CallObject(Callable, LPyTuple);
+        if Assigned(LPyResult) then begin
+          Py_DECREF(LPyResult);
+          AllowChange := PyObject_IsTrue(LVarParam.Value) = 1;
+        end;
+      finally
+        Py_DECREF(LPyTuple);
+      end;
+      CheckError();
+    end;
+end;
+
+{ TTVChangedEventHandler }
+
+constructor TTVChangedEventHandler.Create(PyDelphiWrapper: TPyDelphiWrapper;
+  Component: TObject; PropertyInfo: PPropInfo; Callable: PPyObject);
+var
+  Method : TMethod;
+begin
+  inherited;
+  Method.Code := @TTVChangedEventHandler.DoEvent;
+  Method.Data := Self;
+  SetMethodProp(Component, PropertyInfo, Method);
+end;
+
+class function TTVChangedEventHandler.GetTypeInfo: PTypeInfo;
+begin
+  Result := System.TypeInfo(TTVChangedEvent);
+end;
+
+procedure TTVChangedEventHandler.DoEvent(Sender: TObject; Node: TTreeNode);
+var
+  LPyObject, LPyNode, LPyTuple, LPyResult: PPyObject;
+begin
+  Assert(Assigned(PyDelphiWrapper));
+  if Assigned(Callable) and PythonOK() then
+    with GetPythonEngine() do begin
+      LPyObject := PyDelphiWrapper.Wrap(Sender);
+      LPyNode := PyDelphiWrapper.Wrap(Node);
+      LPyTuple := PyTuple_New(2);
+      PyTuple_SetItem(LPyTuple, 0, LPyObject);
+      PyTuple_SetItem(LPyTuple, 1, LPyNode);
+      try
+        LPyResult := PyObject_CallObject(Callable, LPyTuple);
+        if Assigned(LPyResult) then
+          Py_DECREF(LPyResult);
+      finally
+        Py_DECREF(LPyTuple);
+      end;
+      CheckError();
+    end;
+end;
+
+{ TTVEditingEventHandler }
+
+constructor TTVEditingEventHandler.Create(PyDelphiWrapper: TPyDelphiWrapper;
+  Component: TObject; PropertyInfo: PPropInfo; Callable: PPyObject);
+var
+  Method : TMethod;
+begin
+  inherited;
+  Method.Code := @TTVEditingEventHandler.DoEvent;
+  Method.Data := Self;
+  SetMethodProp(Component, PropertyInfo, Method);
+end;
+
+class function TTVEditingEventHandler.GetTypeInfo: PTypeInfo;
+begin
+  Result := System.TypeInfo(TTVEditingEvent);
+end;
+
+procedure TTVEditingEventHandler.DoEvent(Sender: TObject; Node: TTreeNode;
+  var AllowEdit: Boolean);
+var
+  LPyObject, LPyNode, LPyTuple, LPyResult, LPyAllowEdit: PPyObject;
+  LVarParam: TPyDelphiVarParameter;
+begin
+  Assert(Assigned(PyDelphiWrapper));
+  if Assigned(Callable) and PythonOK() then
+    with GetPythonEngine() do begin
+      LPyObject := PyDelphiWrapper.Wrap(Sender);
+      LPyNode := PyDelphiWrapper.Wrap(Node);
+      LPyAllowEdit := CreateVarParam(PyDelphiWrapper, AllowEdit);
+      LVarParam := PythonToDelphi(LPyAllowEdit) as TPyDelphiVarParameter;
+      LPyTuple := PyTuple_New(3);
+      PyTuple_SetItem(LPyTuple, 0, LPyObject);
+      PyTuple_SetItem(LPyTuple, 1, LPyNode);
+      PyTuple_SetItem(LPyTuple, 2, LPyAllowEdit);
+      try
+        LPyResult := PyObject_CallObject(Callable, LPyTuple);
+        if Assigned(LPyResult) then begin
+          Py_DECREF(LPyResult);
+          AllowEdit := PyObject_IsTrue(LVarParam.Value) = 1;
+        end;
+      finally
+        Py_DECREF(LPyTuple);
+      end;
+      CheckError();
+    end;
+end;
+
+{ TTVEditedEventHandler }
+
+constructor TTVEditedEventHandler.Create(PyDelphiWrapper: TPyDelphiWrapper;
+  Component: TObject; PropertyInfo: PPropInfo; Callable: PPyObject);
+var
+  Method : TMethod;
+begin
+  inherited;
+  Method.Code := @TTVEditedEventHandler.DoEvent;
+  Method.Data := Self;
+  SetMethodProp(Component, PropertyInfo, Method);
+end;
+
+class function TTVEditedEventHandler.GetTypeInfo: PTypeInfo;
+begin
+  Result := System.TypeInfo(TTVEditedEvent);
+end;
+
+procedure TTVEditedEventHandler.DoEvent(Sender: TObject; Node: TTreeNode;
+  var S: string);
+var
+  LPyObject, LPyNode, LPyTuple, LPyResult, LPyS: PPyObject;
+  LVarParam: TPyDelphiVarParameter;
+begin
+  Assert(Assigned(PyDelphiWrapper));
+  if Assigned(Callable) and PythonOK() then
+    with GetPythonEngine() do begin
+      LPyObject := PyDelphiWrapper.Wrap(Sender);
+      LPyNode := PyDelphiWrapper.Wrap(Node);
+      LPyS := CreateVarParam(PyDelphiWrapper, S);
+      LVarParam := PythonToDelphi(LPyS) as TPyDelphiVarParameter;
+      LPyTuple := PyTuple_New(3);
+      PyTuple_SetItem(LPyTuple, 0, LPyObject);
+      PyTuple_SetItem(LPyTuple, 1, LPyNode);
+      PyTuple_SetItem(LPyTuple, 2, LPyS);
+      try
+        LPyResult := PyObject_CallObject(Callable, LPyTuple);
+        if Assigned(LPyResult) then begin
+          Py_DECREF(LPyResult);
+          S := PyObjectAsString(LVarParam.Value);
+        end;
+      finally
+        Py_DECREF(LPyTuple);
+      end;
+      CheckError();
+    end;
+end;
+
+{ TTVExpandingEventHandler }
+
+constructor TTVExpandingEventHandler.Create(PyDelphiWrapper: TPyDelphiWrapper;
+  Component: TObject; PropertyInfo: PPropInfo; Callable: PPyObject);
+var
+  Method : TMethod;
+begin
+  inherited;
+  Method.Code := @TTVExpandingEventHandler.DoEvent;
+  Method.Data := Self;
+  SetMethodProp(Component, PropertyInfo, Method);
+end;
+
+class function TTVExpandingEventHandler.GetTypeInfo: PTypeInfo;
+begin
+  Result := System.TypeInfo(TTVExpandingEvent);
+end;
+
+procedure TTVExpandingEventHandler.DoEvent(Sender: TObject; Node: TTreeNode;
+  var AllowExpansion: Boolean);
+var
+  LPyObject, LPyNode, LPyTuple, LPyResult, LPyAllowExpansion: PPyObject;
+  LVarParam: TPyDelphiVarParameter;
+begin
+  Assert(Assigned(PyDelphiWrapper));
+  if Assigned(Callable) and PythonOK() then
+    with GetPythonEngine() do begin
+      LPyObject := PyDelphiWrapper.Wrap(Sender);
+      LPyNode := PyDelphiWrapper.Wrap(Node);
+      LPyAllowExpansion := CreateVarParam(PyDelphiWrapper, AllowExpansion);
+      LVarParam := PythonToDelphi(LPyAllowExpansion) as TPyDelphiVarParameter;
+      LPyTuple := PyTuple_New(3);
+      PyTuple_SetItem(LPyTuple, 0, LPyObject);
+      PyTuple_SetItem(LPyTuple, 1, LPyNode);
+      PyTuple_SetItem(LPyTuple, 2, LPyAllowExpansion);
+      try
+        LPyResult := PyObject_CallObject(Callable, LPyTuple);
+        if Assigned(LPyResult) then begin
+          Py_DECREF(LPyResult);
+          AllowExpansion := PyObject_IsTrue(LVarParam.Value) = 1;
+        end;
+      finally
+        Py_DECREF(LPyTuple);
+      end;
+      CheckError();
+    end;
+end;
+
+{ TTVCollapsingEventHandler }
+
+constructor TTVCollapsingEventHandler.Create(PyDelphiWrapper: TPyDelphiWrapper;
+  Component: TObject; PropertyInfo: PPropInfo; Callable: PPyObject);
+var
+  Method : TMethod;
+begin
+  inherited;
+  Method.Code := @TTVCollapsingEventHandler.DoEvent;
+  Method.Data := Self;
+  SetMethodProp(Component, PropertyInfo, Method);
+end;
+
+class function TTVCollapsingEventHandler.GetTypeInfo: PTypeInfo;
+begin
+  Result := System.TypeInfo(TTVCollapsingEvent);
+end;
+
+procedure TTVCollapsingEventHandler.DoEvent(Sender: TObject; Node: TTreeNode;
+  var AllowCollapse: Boolean);
+var
+  LPyObject, LPyNode, LPyTuple, LPyResult, LPyAllowCollapse: PPyObject;
+  LVarParam: TPyDelphiVarParameter;
+begin
+  Assert(Assigned(PyDelphiWrapper));
+  if Assigned(Callable) and PythonOK() then
+    with GetPythonEngine() do begin
+      LPyObject := PyDelphiWrapper.Wrap(Sender);
+      LPyNode := PyDelphiWrapper.Wrap(Node);
+      LPyAllowCollapse := CreateVarParam(PyDelphiWrapper, AllowCollapse);
+      LVarParam := PythonToDelphi(LPyAllowCollapse) as TPyDelphiVarParameter;
+      LPyTuple := PyTuple_New(3);
+      PyTuple_SetItem(LPyTuple, 0, LPyObject);
+      PyTuple_SetItem(LPyTuple, 1, LPyNode);
+      PyTuple_SetItem(LPyTuple, 2, LPyAllowCollapse);
+      try
+        LPyResult := PyObject_CallObject(Callable, LPyTuple);
+        if Assigned(LPyResult) then begin
+          Py_DECREF(LPyResult);
+          AllowCollapse := PyObject_IsTrue(LVarParam.Value) = 1;
+        end;
+      finally
+        Py_DECREF(LPyTuple);
+      end;
+      CheckError();
+    end;
+end;
+
+{ TTVExpandedEventHandler }
+
+constructor TTVExpandedEventHandler.Create(PyDelphiWrapper: TPyDelphiWrapper;
+  Component: TObject; PropertyInfo: PPropInfo; Callable: PPyObject);
+var
+  Method : TMethod;
+begin
+  inherited;
+  Method.Code := @TTVExpandedEventHandler.DoEvent;
+  Method.Data := Self;
+  SetMethodProp(Component, PropertyInfo, Method);
+end;
+
+class function TTVExpandedEventHandler.GetTypeInfo: PTypeInfo;
+begin
+  Result := System.TypeInfo(TTVExpandedEvent);
+end;
+
+procedure TTVExpandedEventHandler.DoEvent(Sender: TObject; Node: TTreeNode);
+var
+  LPyObject, LPyNode, LPyTuple, LPyResult: PPyObject;
+begin
+  Assert(Assigned(PyDelphiWrapper));
+  if Assigned(Callable) and PythonOK() then
+    with GetPythonEngine() do begin
+      LPyObject := PyDelphiWrapper.Wrap(Sender);
+      LPyNode := PyDelphiWrapper.Wrap(Node);
+      LPyTuple := PyTuple_New(2);
+      PyTuple_SetItem(LPyTuple, 0, LPyObject);
+      PyTuple_SetItem(LPyTuple, 1, LPyNode);
+      try
+        LPyResult := PyObject_CallObject(Callable, LPyTuple);
+        if Assigned(LPyResult) then
+          Py_DECREF(LPyResult);
+      finally
+        Py_DECREF(LPyTuple);
+      end;
+      CheckError();
+    end;
+end;
+
+{ TTVCompareEventHandler }
+
+constructor TTVCompareEventHandler.Create(PyDelphiWrapper: TPyDelphiWrapper;
+  Component: TObject; PropertyInfo: PPropInfo; Callable: PPyObject);
+var
+  Method : TMethod;
+begin
+  inherited;
+  Method.Code := @TTVCompareEventHandler.DoEvent;
+  Method.Data := Self;
+  SetMethodProp(Component, PropertyInfo, Method);
+end;
+
+class function TTVCompareEventHandler.GetTypeInfo: PTypeInfo;
+begin
+  Result := System.TypeInfo(TTVCompareEvent);
+end;
+
+procedure TTVCompareEventHandler.DoEvent(Sender: TObject; Node1, Node2: TTreeNode;
+  Data: Integer; var Compare: Integer);
+var
+  LPyObject, LPyNode1, LPyNode2, LPyTuple, LPyResult, LPyCompare: PPyObject;
+  LVarParam: TPyDelphiVarParameter;
+begin
+  Assert(Assigned(PyDelphiWrapper));
+  if Assigned(Callable) and PythonOK() then
+    with GetPythonEngine() do begin
+      LPyObject := PyDelphiWrapper.Wrap(Sender);
+      LPyNode1 := PyDelphiWrapper.Wrap(Node1);
+      LPyNode2 := PyDelphiWrapper.Wrap(Node2);
+      LPyCompare := CreateVarParam(PyDelphiWrapper, Compare);
+      LVarParam := PythonToDelphi(LPyCompare) as TPyDelphiVarParameter;
+      LPyTuple := PyTuple_New(5);
+      PyTuple_SetItem(LPyTuple, 0, LPyObject);
+      PyTuple_SetItem(LPyTuple, 1, LPyNode1);
+      PyTuple_SetItem(LPyTuple, 2, LPyNode2);
+      PyTuple_SetItem(LPyTuple, 3, PyLong_FromLong(Data));
+      PyTuple_SetItem(LPyTuple, 4, LPyCompare);
+      try
+        LPyResult := PyObject_CallObject(Callable, LPyTuple);
+        if Assigned(LPyResult) then begin
+          Py_DECREF(LPyResult);
+          Compare := PyLong_AsLong(LVarParam.Value);
+        end;
+      finally
+        Py_DECREF(LPyTuple);
+      end;
+      CheckError();
+    end;
+end;
+
+{ TTVHintEventHandler }
+
+constructor TTVHintEventHandler.Create(PyDelphiWrapper: TPyDelphiWrapper;
+  Component: TObject; PropertyInfo: PPropInfo; Callable: PPyObject);
+var
+  Method : TMethod;
+begin
+  inherited;
+  Method.Code := @TTVHintEventHandler.DoEvent;
+  Method.Data := Self;
+  SetMethodProp(Component, PropertyInfo, Method);
+end;
+
+class function TTVHintEventHandler.GetTypeInfo: PTypeInfo;
+begin
+  Result := System.TypeInfo(TTVHintEvent);
+end;
+
+procedure TTVHintEventHandler.DoEvent(Sender: TObject; const Node: TTreeNode;
+  var Hint: String);
+var
+  LPyObject, LPyNode, LPyTuple, LPyResult, LPyHint: PPyObject;
+  LVarParam: TPyDelphiVarParameter;
+begin
+  Assert(Assigned(PyDelphiWrapper));
+  if Assigned(Callable) and PythonOK() then
+    with GetPythonEngine() do begin
+      LPyObject := PyDelphiWrapper.Wrap(Sender);
+      LPyNode := PyDelphiWrapper.Wrap(Node);
+      LPyHint := CreateVarParam(PyDelphiWrapper, Hint);
+      LVarParam := PythonToDelphi(LPyHint) as TPyDelphiVarParameter;
+      LPyTuple := PyTuple_New(3);
+      PyTuple_SetItem(LPyTuple, 0, LPyObject);
+      PyTuple_SetItem(LPyTuple, 1, LPyNode);
+      PyTuple_SetItem(LPyTuple, 2, LPyHint);
+      try
+        LPyResult := PyObject_CallObject(Callable, LPyTuple);
+        if Assigned(LPyResult) then begin
+          Py_DECREF(LPyResult);
+          Hint := PyObjectAsString(LVarParam.Value);
+        end;
+      finally
+        Py_DECREF(LPyTuple);
+      end;
+      CheckError();
+    end;
+end;
+
+{ TTVCustomDrawEventHandler }
+
+constructor TTVCustomDrawEventHandler.Create(PyDelphiWrapper: TPyDelphiWrapper;
+  Component: TObject; PropertyInfo: PPropInfo; Callable: PPyObject);
+var
+  Method : TMethod;
+begin
+  inherited;
+  Method.Code := @TTVCustomDrawEventHandler.DoEvent;
+  Method.Data := Self;
+  SetMethodProp(Component, PropertyInfo, Method);
+end;
+
+class function TTVCustomDrawEventHandler.GetTypeInfo: PTypeInfo;
+begin
+  Result := System.TypeInfo(TTVCustomDrawEvent);
+end;
+
+procedure TTVCustomDrawEventHandler.DoEvent(Sender: TCustomTreeView;
+  const ARect: TRect; var DefaultDraw: Boolean);
+var
+  LPyObject, LPyRect, LPyTuple, LPyResult, LPyDefaultDraw: PPyObject;
+  LVarParam: TPyDelphiVarParameter;
+begin
+  Assert(Assigned(PyDelphiWrapper));
+  if Assigned(Callable) and PythonOK() then
+    with GetPythonEngine() do begin
+      LPyObject := PyDelphiWrapper.Wrap(Sender);
+      LPyRect := WrapRect(PyDelphiWrapper, ARect);
+      LPyDefaultDraw := CreateVarParam(PyDelphiWrapper, DefaultDraw);
+      LVarParam := PythonToDelphi(LPyDefaultDraw) as TPyDelphiVarParameter;
+      LPyTuple := PyTuple_New(3);
+      PyTuple_SetItem(LPyTuple, 0, LPyObject);
+      PyTuple_SetItem(LPyTuple, 1, LPyRect);
+      PyTuple_SetItem(LPyTuple, 2, LPyDefaultDraw);
+      try
+        LPyResult := PyObject_CallObject(Callable, LPyTuple);
+        if Assigned(LPyResult) then begin
+          Py_DECREF(LPyResult);
+          DefaultDraw := PyObject_IsTrue(LVarParam.Value) = 1;
+        end;
+      finally
+        Py_DECREF(LPyTuple);
+      end;
+      CheckError();
+    end;
+end;
+
+{ TTVCustomDrawItemEventHandler }
+
+constructor TTVCustomDrawItemEventHandler.Create(
+  PyDelphiWrapper: TPyDelphiWrapper; Component: TObject;
+  PropertyInfo: PPropInfo; Callable: PPyObject);
+var
+  Method : TMethod;
+begin
+  inherited;
+  Method.Code := @TTVCustomDrawItemEventHandler.DoEvent;
+  Method.Data := Self;
+  SetMethodProp(Component, PropertyInfo, Method);
+end;
+
+class function TTVCustomDrawItemEventHandler.GetTypeInfo: PTypeInfo;
+begin
+  Result := System.TypeInfo(TTVCustomDrawItemEvent);
+end;
+
+procedure TTVCustomDrawItemEventHandler.DoEvent(Sender: TCustomTreeView;
+  Node: TTreeNode; State: TCustomDrawState; var DefaultDraw: Boolean);
+var
+  LPyObject, LPyRect, LPyTuple, LPyResult, LPyDefaultDraw: PPyObject;
+  LVarParam: TPyDelphiVarParameter;
+begin
+  Assert(Assigned(PyDelphiWrapper));
+  if Assigned(Callable) and PythonOK() then
+    with GetPythonEngine() do begin
+      LPyObject := PyDelphiWrapper.Wrap(Sender);
+      LPyRect := PyDelphiWrapper.Wrap(Node);
+      LPyDefaultDraw := CreateVarParam(PyDelphiWrapper, DefaultDraw);
+      LVarParam := PythonToDelphi(LPyDefaultDraw) as TPyDelphiVarParameter;
+      LPyTuple := PyTuple_New(4);
+      PyTuple_SetItem(LPyTuple, 0, LPyObject);
+      PyTuple_SetItem(LPyTuple, 1, LPyRect);
+      PyTuple_SetItem(LPyTuple, 2, CustomDrawStateToPython(State));
+      PyTuple_SetItem(LPyTuple, 3, LPyDefaultDraw);
+      try
+        LPyResult := PyObject_CallObject(Callable, LPyTuple);
+        if Assigned(LPyResult) then begin
+          Py_DECREF(LPyResult);
+          DefaultDraw := PyObject_IsTrue(LVarParam.Value) = 1;
+        end;
+      finally
+        Py_DECREF(LPyTuple);
+      end;
+      CheckError();
+    end;
+end;
+
+{ TTVAdvancedCustomDrawEventHandler }
+
+constructor TTVAdvancedCustomDrawEventHandler.Create(
+  PyDelphiWrapper: TPyDelphiWrapper; Component: TObject;
+  PropertyInfo: PPropInfo; Callable: PPyObject);
+var
+  Method : TMethod;
+begin
+  inherited;
+  Method.Code := @TTVAdvancedCustomDrawEventHandler.DoEvent;
+  Method.Data := Self;
+  SetMethodProp(Component, PropertyInfo, Method);
+end;
+
+class function TTVAdvancedCustomDrawEventHandler.GetTypeInfo: PTypeInfo;
+begin
+  Result := System.TypeInfo(TTVAdvancedCustomDrawEvent);
+end;
+
+procedure TTVAdvancedCustomDrawEventHandler.DoEvent(Sender: TCustomTreeView;
+  const ARect: TRect; Stage: TCustomDrawStage; var DefaultDraw: Boolean);
+var
+  LPyObject, LPyRect, LPyTuple, LPyResult, LPyDefaultDraw: PPyObject;
+  LVarParam: TPyDelphiVarParameter;
+begin
+  Assert(Assigned(PyDelphiWrapper));
+  if Assigned(Callable) and PythonOK() then
+    with GetPythonEngine() do begin
+      LPyObject := PyDelphiWrapper.Wrap(Sender);
+      LPyRect := WrapRect(PyDelphiWrapper, ARect);
+      LPyDefaultDraw := CreateVarParam(PyDelphiWrapper, DefaultDraw);
+      LVarParam := PythonToDelphi(LPyDefaultDraw) as TPyDelphiVarParameter;
+      LPyTuple := PyTuple_New(4);
+      PyTuple_SetItem(LPyTuple, 0, LPyObject);
+      PyTuple_SetItem(LPyTuple, 1, LPyRect);
+      PyTuple_SetItem(LPyTuple, 2, CustomDrawStageToPython(Stage));
+      PyTuple_SetItem(LPyTuple, 3, LPyDefaultDraw);
+      try
+        LPyResult := PyObject_CallObject(Callable, LPyTuple);
+        if Assigned(LPyResult) then begin
+          Py_DECREF(LPyResult);
+          DefaultDraw := PyObject_IsTrue(LVarParam.Value) = 1;
+        end;
+      finally
+        Py_DECREF(LPyTuple);
+      end;
+      CheckError();
+    end;
+end;
+
+{ TTVAdvancedCustomDrawItemEventHandler }
+
+constructor TTVAdvancedCustomDrawItemEventHandler.Create(
+  PyDelphiWrapper: TPyDelphiWrapper; Component: TObject;
+  PropertyInfo: PPropInfo; Callable: PPyObject);
+var
+  Method : TMethod;
+begin
+  inherited;
+  Method.Code := @TTVAdvancedCustomDrawItemEventHandler.DoEvent;
+  Method.Data := Self;
+  SetMethodProp(Component, PropertyInfo, Method);
+end;
+
+class function TTVAdvancedCustomDrawItemEventHandler.GetTypeInfo: PTypeInfo;
+begin
+  Result := System.TypeInfo(TTVAdvancedCustomDrawItemEvent);
+end;
+
+procedure TTVAdvancedCustomDrawItemEventHandler.DoEvent(Sender: TCustomTreeView;
+  Node: TTreeNode; State: TCustomDrawState; Stage: TCustomDrawStage;
+  var PaintImages, DefaultDraw: Boolean);
+var
+  LPyObject, LPyNode, LPyTuple, LPyResult, LPyPaintImages, LPyDefaultDraw: PPyObject;
+  LVarPaintImages, LVarDefaultDraw: TPyDelphiVarParameter;
+begin
+  Assert(Assigned(PyDelphiWrapper));
+  if Assigned(Callable) and PythonOK() then
+    with GetPythonEngine() do begin
+      LPyObject := PyDelphiWrapper.Wrap(Sender);
+      LPyNode := PyDelphiWrapper.Wrap(Node);
+      LPyPaintImages := CreateVarParam(PyDelphiWrapper, PaintImages);
+      LVarPaintImages := PythonToDelphi(LPyPaintImages) as TPyDelphiVarParameter;
+      LPyDefaultDraw := CreateVarParam(PyDelphiWrapper, DefaultDraw);
+      LVarDefaultDraw := PythonToDelphi(LPyDefaultDraw) as TPyDelphiVarParameter;
+      LPyTuple := PyTuple_New(6);
+      PyTuple_SetItem(LPyTuple, 0, LPyObject);
+      PyTuple_SetItem(LPyTuple, 1, LPyNode);
+      PyTuple_SetItem(LPyTuple, 2, CustomDrawStateToPython(State));
+      PyTuple_SetItem(LPyTuple, 3, CustomDrawStageToPython(Stage));
+      PyTuple_SetItem(LPyTuple, 4, LPyPaintImages);
+      PyTuple_SetItem(LPyTuple, 5, LPyDefaultDraw);
+      try
+        LPyResult := PyObject_CallObject(Callable, LPyTuple);
+        if Assigned(LPyResult) then begin
+          Py_DECREF(LPyResult);
+          PaintImages := PyObject_IsTrue(LVarPaintImages.Value) = 1;
+          DefaultDraw := PyObject_IsTrue(LVarDefaultDraw.Value) = 1;
+        end;
+      finally
+        Py_DECREF(LPyTuple);
+      end;
+      CheckError();
+    end;
+end;
+
+{ TTVCreateNodeClassEventHandler }
+
+constructor TTVCreateNodeClassEventHandler.Create(
+  PyDelphiWrapper: TPyDelphiWrapper; Component: TObject;
+  PropertyInfo: PPropInfo; Callable: PPyObject);
+var
+  Method : TMethod;
+begin
+  inherited;
+  Method.Code := @TTVCreateNodeClassEventHandler.DoEvent;
+  Method.Data := Self;
+  SetMethodProp(Component, PropertyInfo, Method);
+end;
+
+class function TTVCreateNodeClassEventHandler.GetTypeInfo: PTypeInfo;
+begin
+  Result := System.TypeInfo(TTVCreateNodeClassEvent);
+end;
+
+procedure TTVCreateNodeClassEventHandler.DoEvent(Sender: TCustomTreeView;
+  var NodeClass: TTreeNodeClass);
+var
+  LPyObject, LPyNodeClass, LPyTuple, LPyResult: PPyObject;
+begin
+  Assert(Assigned(PyDelphiWrapper));
+  if Assigned(Callable) and PythonOK() then
+    with GetPythonEngine() do begin
+      LPyObject := PyDelphiWrapper.Wrap(Sender);
+      LPyNodeClass := PyDelphiWrapper.WrapClass(NodeClass);
+      LPyTuple := PyTuple_New(2);
+      PyTuple_SetItem(LPyTuple, 0, LPyObject);
+      PyTuple_SetItem(LPyTuple, 1, LPyNodeClass);
+      try
+        LPyResult := PyObject_CallObject(Callable, LPyTuple);
+        if Assigned(LPyResult) then
+          Py_DECREF(LPyResult);
+      finally
+        Py_DECREF(LPyTuple);
+      end;
+      CheckError();
+    end;
+end;
+
+{ TTVCheckStateChangedEventHandler }
+
+constructor TTVCheckStateChangedEventHandler.Create(
+  PyDelphiWrapper: TPyDelphiWrapper; Component: TObject;
+  PropertyInfo: PPropInfo; Callable: PPyObject);
+var
+  Method : TMethod;
+begin
+  inherited;
+  Method.Code := @TTVCheckStateChangedEventHandler.DoEvent;
+  Method.Data := Self;
+  SetMethodProp(Component, PropertyInfo, Method);
+end;
+
+class function TTVCheckStateChangedEventHandler.GetTypeInfo: PTypeInfo;
+begin
+  Result := System.TypeInfo(TTVCheckStateChangedEvent);
+end;
+
+procedure TTVCheckStateChangedEventHandler.DoEvent(Sender: TCustomTreeView;
+  Node: TTreeNode; CheckState: TNodeCheckState);
+var
+  LPyObject, LPyNode, LPyTuple, LPyResult: PPyObject;
+begin
+  Assert(Assigned(PyDelphiWrapper));
+  if Assigned(Callable) and PythonOK() then
+    with GetPythonEngine() do begin
+      LPyObject := PyDelphiWrapper.Wrap(Sender);
+      LPyNode := PyDelphiWrapper.Wrap(Node);
+      LPyTuple := PyTuple_New(3);
+      PyTuple_SetItem(LPyTuple, 0, LPyObject);
+      PyTuple_SetItem(LPyTuple, 1, LPyNode);
+      PyTuple_SetItem(LPyTuple, 2, NodeCheckStateToPython(CheckState));
+      try
+        LPyResult := PyObject_CallObject(Callable, LPyTuple);
+        if Assigned(LPyResult) then
+          Py_DECREF(LPyResult);
+      finally
+        Py_DECREF(LPyTuple);
+      end;
+      CheckError();
+    end;
+end;
+
+{ TTVCheckStateChangingEventHandler }
+
+constructor TTVCheckStateChangingEventHandler.Create(
+  PyDelphiWrapper: TPyDelphiWrapper; Component: TObject;
+  PropertyInfo: PPropInfo; Callable: PPyObject);
+var
+  Method : TMethod;
+begin
+  inherited;
+  Method.Code := @TTVCheckStateChangingEventHandler.DoEvent;
+  Method.Data := Self;
+  SetMethodProp(Component, PropertyInfo, Method);
+end;
+
+class function TTVCheckStateChangingEventHandler.GetTypeInfo: PTypeInfo;
+begin
+  Result := System.TypeInfo(TTVCheckStateChangingEvent);
+end;
+
+procedure TTVCheckStateChangingEventHandler.DoEvent(Sender: TCustomTreeView;
+  Node: TTreeNode; NewCheckState, OldCheckState: TNodeCheckState;
+  var AllowChange: Boolean);
+var
+  LPyObject, LPyNode, LPyTuple, LPyResult, LPyAllowChange: PPyObject;
+  LVarParam: TPyDelphiVarParameter;
+begin
+  Assert(Assigned(PyDelphiWrapper));
+  if Assigned(Callable) and PythonOK() then
+    with GetPythonEngine() do begin
+      LPyObject := PyDelphiWrapper.Wrap(Sender);
+      LPyNode := PyDelphiWrapper.Wrap(Node);
+      LPyAllowChange := CreateVarParam(PyDelphiWrapper, AllowChange);
+      LVarParam := PythonToDelphi(LPyAllowChange) as TPyDelphiVarParameter;
+      LPyTuple := PyTuple_New(5);
+      PyTuple_SetItem(LPyTuple, 0, LPyObject);
+      PyTuple_SetItem(LPyTuple, 1, LPyNode);
+      PyTuple_SetItem(LPyTuple, 2, NodeCheckStateToPython(NewCheckState));
+      PyTuple_SetItem(LPyTuple, 3, NodeCheckStateToPython(OldCheckState));
+      PyTuple_SetItem(LPyTuple, 4, LPyAllowChange);
+      try
+        LPyResult := PyObject_CallObject(Callable, LPyTuple);
+        if Assigned(LPyResult) then begin
+          Py_DECREF(LPyResult);
+          AllowChange := PyObject_IsTrue(LVarParam.Value) = 1;
+        end;
+      finally
+        Py_DECREF(LPyTuple);
+      end;
+      CheckError();
+    end;
 end;
 
 initialization
