@@ -184,6 +184,15 @@ type
     class function GetTypeInfo : PTypeInfo; override;
   end;
 
+  TContextPopupEventHandler = class(TEventHandler)
+  protected
+    procedure DoEvent(Sender: TObject; MousePos: TPoint; var Handled: Boolean);
+  public
+    constructor Create(PyDelphiWrapper : TPyDelphiWrapper; Component : TObject;
+      PropertyInfo : PPropInfo; Callable : PPyObject); override;
+    class function GetTypeInfo : PTypeInfo; override;
+  end;
+
 implementation
 
 uses
@@ -236,6 +245,8 @@ begin
 
   APyDelphiWrapper.EventHandlers.RegisterHandler(TMouseEventHandler);
   APyDelphiWrapper.EventHandlers.RegisterHandler(TMouseMoveEventHandler);
+
+  APyDelphiWrapper.EventHandlers.RegisterHandler(TContextPopupEventHandler);
 end;
 
 { TPyDelphiControl }
@@ -922,6 +933,55 @@ procedure TPyDelphiCustomMultiListControl.SetDelphiObject(
   const Value: TCustomMultiSelectListControl);
 begin
   inherited DelphiObject := Value;
+end;
+
+{ TContextPopupEventHandler }
+
+constructor TContextPopupEventHandler.Create(PyDelphiWrapper: TPyDelphiWrapper;
+  Component: TObject; PropertyInfo: PPropInfo; Callable: PPyObject);
+var
+  LMethod : TMethod;
+begin
+  inherited;
+  LMethod.Code := @TContextPopupEventHandler.DoEvent;
+  LMethod.Data := Self;
+  SetMethodProp(Component, PropertyInfo, LMethod);
+end;
+
+class function TContextPopupEventHandler.GetTypeInfo: PTypeInfo;
+begin
+  Result := System.TypeInfo(TContextPopupEvent);
+end;
+
+
+procedure TContextPopupEventHandler.DoEvent(Sender: TObject; MousePos: TPoint;
+  var Handled: Boolean);
+var
+  LPyObject, LPyMousePos, LPyTuple, LPyResult, LPyHandled: PPyObject;
+  LVarParam: TPyDelphiVarParameter;
+begin
+  Assert(Assigned(PyDelphiWrapper));
+  if Assigned(Callable) and PythonOK() then
+    with GetPythonEngine() do begin
+      LPyObject := PyDelphiWrapper.Wrap(Sender);
+      LPyMousePos := WrapPoint(PyDelphiWrapper, MousePos);
+      LPyHandled := CreateVarParam(PyDelphiWrapper, Handled);
+      LVarParam := PythonToDelphi(LPyHandled) as TPyDelphiVarParameter;
+      LPyTuple := PyTuple_New(3);
+      PyTuple_SetItem(LPyTuple, 0, LPyObject);
+      PyTuple_SetItem(LPyTuple, 1, LPyMousePos);
+      PyTuple_SetItem(LPyTuple, 2, LPyHandled);
+      try
+        LPyResult := PyObject_CallObject(Callable, LPyTuple);
+        if Assigned(LPyResult) then begin
+          Py_DECREF(LPyResult);
+          Handled := PyObject_IsTrue(LVarParam.Value) = 1;
+        end;
+      finally
+        Py_DECREF(LPyTuple);
+      end;
+      CheckError();
+    end;
 end;
 
 initialization
