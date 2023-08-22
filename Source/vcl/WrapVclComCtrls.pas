@@ -786,10 +786,13 @@ function CustomDrawStateToPython(const ACustomDrawState: TCustomDrawState): PPyO
 
 var
   LState: integer;
+  LCompType: PPTypeInfo;
 begin
   Result := GetPythonEngine().PyList_New(0);
+
+  LCompType := GetTypeData(TypeInfo(TCustomDrawState))^.CompType;
   for LState := Ord(cdsSelected) to Ord(cdsDropHilited) do
-    Append(Result, System.TypInfo.GetEnumName(TypeInfo(TCustomDrawState), LState));
+    Append(Result, GetEnumName(LCompType^, LState));
 end;
 
 function ItemChangeToPython(const AItemChange: TItemChange): PPyObject;
@@ -2349,7 +2352,7 @@ end;
 procedure TTVCreateNodeClassEventHandler.DoEvent(Sender: TCustomTreeView;
   var NodeClass: TTreeNodeClass);
 var
-  LPyObject, LPyNodeClass, LPyTuple, LPyResult: PPyObject;
+  LPyObject, LPyTuple, LPyResult, LPyNodeClass: PPyObject;
   LVarParam: TPyDelphiVarParameter;
   LClass: TClass;
 begin
@@ -2357,7 +2360,7 @@ begin
   if Assigned(Callable) and PythonOK() then
     with GetPythonEngine() do begin
       LPyObject := PyDelphiWrapper.Wrap(Sender);
-      LPyNodeClass := PyDelphiWrapper.WrapClass(NodeClass);
+      LPyNodeClass := CreateVarParam(PyDelphiWrapper, NodeClass);
       LVarParam := PythonToDelphi(LPyNodeClass) as TPyDelphiVarParameter;
       LPyTuple := PyTuple_New(2);
       PyTuple_SetItem(LPyTuple, 0, LPyObject);
@@ -3623,7 +3626,7 @@ end;
 procedure TLVCreateItemClassEventHandler.DoEvent(Sender: TCustomListView;
   var ItemClass: TListItemClass);
 var
-  LPyObject, LPyItemClass, LPyTuple, LPyResult: PPyObject;
+  LPyObject, LPyTuple, LPyResult, LPyItemClass: PPyObject;
   LVarParam: TPyDelphiVarParameter;
   LClass: TClass;
 begin
@@ -3631,7 +3634,7 @@ begin
   if Assigned(Callable) and PythonOK() then
     with GetPythonEngine() do begin
       LPyObject := PyDelphiWrapper.Wrap(Sender);
-      LPyItemClass := PyDelphiWrapper.WrapClass(ItemClass);
+      LPyItemClass := CreateVarParam(PyDelphiWrapper, ItemClass);
       LVarParam := PythonToDelphi(LPyItemClass) as TPyDelphiVarParameter;
       LPyTuple := PyTuple_New(2);
       PyTuple_SetItem(LPyTuple, 0, LPyObject);
