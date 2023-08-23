@@ -785,14 +785,17 @@ function CustomDrawStateToPython(const ACustomDrawState: TCustomDrawState): PPyO
   end;
 
 var
+  LCompType: PTypeInfo;
+  LMin: integer;
+  LMax: integer;
   LState: integer;
-  LCompType: PPTypeInfo;
 begin
   Result := GetPythonEngine().PyList_New(0);
-
-  LCompType := GetTypeData(TypeInfo(TCustomDrawState))^.CompType;
-  for LState := Ord(cdsSelected) to Ord(cdsDropHilited) do
-    Append(Result, GetEnumName(LCompType^, LState));
+  LCompType := GetTypeData(TypeInfo(TCustomDrawState)).CompType^;
+  LMin := LCompType^.TypeData^.MinValue;
+  LMax := LCompType^.TypeData^.MaxValue;
+  for LState := LMin to LMax do
+    Append(Result, GetEnumName(LCompType, LState));
 end;
 
 function ItemChangeToPython(const AItemChange: TItemChange): PPyObject;
