@@ -13,7 +13,7 @@ uses
   PythonEngine,
   WrapDelphi,
   WrapDelphiClasses,
-  WrapVclImageList;
+  WrapVclImgList;
 
 type
   {
