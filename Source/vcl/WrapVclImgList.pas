@@ -1,6 +1,6 @@
 {$I Definition.Inc}
 
-unit WrapVclImageList;
+unit WrapVclImgList;
 
 interface
 
