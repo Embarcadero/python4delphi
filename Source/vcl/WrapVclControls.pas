@@ -12,7 +12,8 @@ uses
   Vcl.Controls,
   PythonEngine,
   WrapDelphi,
-  WrapDelphiClasses;
+  WrapDelphiClasses,
+  WrapVclImageList;
 
 type
   {
@@ -144,6 +145,26 @@ type
     property DelphiObject: TCustomMultiSelectListControl read GetDelphiObject write SetDelphiObject;
   end;
 
+  TPyDelphiDragImageList = class (TPyDelphiCustomImageList)
+  private
+    function  GetDelphiObject: TDragImageList;
+    procedure SetDelphiObject(const Value: TDragImageList);
+  public
+    class function  DelphiObjectClass : TClass; override;
+    // Properties
+    property DelphiObject: TDragImageList read GetDelphiObject write SetDelphiObject;
+  end;
+
+  TPyDelphiImageList = class (TPyDelphiDragImageList)
+  private
+    function  GetDelphiObject: TImageList;
+    procedure SetDelphiObject(const Value: TImageList);
+  public
+    class function  DelphiObjectClass : TClass; override;
+    // Properties
+    property DelphiObject: TImageList read GetDelphiObject write SetDelphiObject;
+  end;
+
   { TKeyPressEvent wrapper }
   TKeyPressEventHandler = class(TEventHandler)
   protected
@@ -239,6 +260,8 @@ begin
   APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiCustomControl);
   APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiCustomListControl);
   APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiCustomMultiListControl);
+  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiDragImageList);
+  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiImageList);
 
   APyDelphiWrapper.EventHandlers.RegisterHandler(TKeyPressEventHandler);
   APyDelphiWrapper.EventHandlers.RegisterHandler(TKeyEventHandler);
@@ -982,6 +1005,40 @@ begin
       end;
       CheckError();
     end;
+end;
+
+{ TPyDelphiDragImageList }
+
+class function TPyDelphiDragImageList.DelphiObjectClass: TClass;
+begin
+  Result := TDragImageList;
+end;
+
+function TPyDelphiDragImageList.GetDelphiObject: TDragImageList;
+begin
+  Result := TDragImageList(inherited DelphiObject);
+end;
+
+procedure TPyDelphiDragImageList.SetDelphiObject(const Value: TDragImageList);
+begin
+  inherited DelphiObject := Value;
+end;
+
+{ TPyDelphiImageList }
+
+class function TPyDelphiImageList.DelphiObjectClass: TClass;
+begin
+  Result := TImageList;
+end;
+
+function TPyDelphiImageList.GetDelphiObject: TImageList;
+begin
+  Result := TImageList(inherited DelphiObject);
+end;
+
+procedure TPyDelphiImageList.SetDelphiObject(const Value: TImageList);
+begin
+  inherited DelphiObject := Value;
 end;
 
 initialization
