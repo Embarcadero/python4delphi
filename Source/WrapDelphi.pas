@@ -1589,7 +1589,7 @@ begin
         nil,
         true);
     finally
-      GetPythonEngine().Py_CLEAR(LIndexes);
+      GetPythonEngine().Py_DecRef(LIndexes);
     end;
   end;
 end;
@@ -1623,7 +1623,7 @@ begin
         nil,
         true);
     finally
-      GetPythonEngine().Py_CLEAR(LIndexes);
+      GetPythonEngine().Py_DecRef(LIndexes);
     end;
   end else begin
     LIndexes := GetPythonEngine().PyTuple_New(2);
@@ -1640,7 +1640,7 @@ begin
         nil,
         true);
     finally
-      GetPythonEngine().Py_CLEAR(LIndexes);
+      GetPythonEngine().Py_DecRef(LIndexes);
     end;
   end;
 
