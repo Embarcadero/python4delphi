@@ -1,56 +1,14 @@
-(**************************************************************************)
+﻿(**************************************************************************)
+(*  This unit is part of the Python for Delphi (P4D) library              *)
+(*  Project home: https://github.com/pyscripter/python4delphi             *)
 (*                                                                        *)
-(* Module:  Unit 'PythonEngine'     Copyright (c) 1997                    *)
+(*  Project Maintainer:  PyScripter (pyscripter@gmail.com)                *)
+(*  Original Authors:    Dr. Dietmar Budelsky (dbudelsky@web.de)          *)
+(*                       Morgan Martinet (https://github.com/mmm-experts) *)
+(*  Core developer:      Lucas Belo (lucas.belo@live.com)                 *)
+(*  Contributors:        See contributors.md at project home              *)
 (*                                                                        *)
-(*                                  Dr. Dietmar Budelsky                  *)
-(*                                  dbudelsky@web.de                      *)
-(*                                  Germany                               *)
-(*                                                                        *)
-(*                                  Morgan Martinet                       *)
-(*                                  4723 rue Brebeuf                      *)
-(*                                  H2J 3L2 MONTREAL (QC)                 *)
-(*                                  CANADA                                *)
-(*                                  e-mail: p4d@mmm-experts.com           *)
-(*                                                                        *)
-(*                                  PyScripter                            *)
-(*                                  e-mail: pyscripter@gmail.com          *)
-(*                                                                        *)
-(*  Project page: https://github.com/pyscripter/python4delphi             *)
-(**************************************************************************)
-(*  Functionality:  Delphi Components that provide an interface to the    *)
-(*                  Python language (see python.txt for more infos on     *)
-(*                  Python itself).                                       *)
-(*                                                                        *)
-(**************************************************************************)
-(*  Contributors:                                                         *)
-(*      Grzegorz Makarewicz (mak@mikroplan.com.pl)                        *)
-(*      Andrew Robinson (andy@hps1.demon.co.uk)                           *)
-(*      Mark Watts(mark_watts@hotmail.com)                                *)
-(*      Olivier Deckmyn (olivier.deckmyn@mail.dotcom.fr)                  *)
-(*      Sigve Tjora (public@tjora.no)                                     *)
-(*      Mark Derricutt (mark@talios.com)                                  *)
-(*      Igor E. Poteryaev (jah@mail.ru)                                   *)
-(*      Yuri Filimonov (fil65@mail.ru)                                    *)
-(*      Stefan Hoffmeister (Stefan.Hoffmeister@Econos.de)                 *)
-(*      Michiel du Toit (micdutoit@hsbfn.com) - Lazarus Port              *)
-(*      Chris Nicolai (nicolaitanes@gmail.com)                            *)
-(*      Andrey Gruzdev (andrey.gruzdev@gmail.com)                         *)
-(**************************************************************************)
-(* This source code is distributed with no WARRANTY, for no reason or use.*)
-(* Everyone is allowed to use and change this code free for his own tasks *)
-(* and projects, as long as this header and its copyright text is intact. *)
-(* For changed versions of this code, which are public distributed the    *)
-(* following additional conditions have to be fullfilled:                 *)
-(* 1) The header has to contain a comment on the change and the author of *)
-(*    it.                                                                 *)
-(* 2) A copy of the changed source has to be sent to the above E-Mail     *)
-(*    address or my then valid address, if this is possible to the        *)
-(*    author.                                                             *)
-(* The second condition has the target to maintain an up to date central  *)
-(* version of the component. If this condition is not acceptable for      *)
-(* confidential or legal reasons, everyone is free to derive a component  *)
-(* or to generate a diff file to my or other original sources.            *)
-(* Dr. Dietmar Budelsky, 1997-11-17                                       *)
+(*  LICENCE and Copyright: MIT (see project home)                         *)
 (**************************************************************************)
 
 {$I Definition.Inc}
@@ -1958,8 +1916,9 @@ type
     function   ArrayToPyDict( const items : array of const) : PPyObject;
     function   StringsToPyList( strings : TStrings ) : PPyObject;
     function   StringsToPyTuple( strings : TStrings ) : PPyObject;
-    procedure PyListToStrings(list: PPyObject; Strings: TStrings; ClearStrings: Boolean = True);
+    procedure  PyListToStrings(list: PPyObject; Strings: TStrings; ClearStrings: Boolean = True);
     procedure  PyTupleToStrings( tuple: PPyObject; strings : TStrings );
+    function   GetSequenceItem( sequence : PPyObject; idx : Integer ) : Variant;
     function   ReturnNone : PPyObject;
     function   ReturnTrue : PPyObject;
     function   ReturnFalse : PPyObject;
@@ -4691,7 +4650,7 @@ begin
   for I := 0 to argc do begin
     {
        ... the first entry should refer to the script file to be executed rather
-       than the executable hosting the Python interpreter. If there isn�t a
+       than the executable hosting the Python interpreter. If there isn’t a
        script that will be run, the first entry in argv can be an empty string.
     }
     if I = 0 then
@@ -4793,6 +4752,19 @@ begin
 {$ELSE}
   Result := FPythonPath;
 {$ENDIF}
+end;
+
+function TPythonEngine.GetSequenceItem(sequence: PPyObject;
+  idx: Integer): Variant;
+  var
+    val : PPyObject;
+  begin
+    val := PySequence_GetItem( sequence, idx );
+    try
+      Result := PyObjectAsVariant( val );
+    finally
+      Py_XDecRef( val );
+    end;
 end;
 
 function  TPythonEngine.GetProgramName: UnicodeString;
@@ -5752,18 +5724,6 @@ function TPythonEngine.PyObjectAsVariant( obj : PPyObject ) : Variant;
       end;
   end;
 
-  function GetSequenceItem( sequence : PPyObject; idx : Integer ) : Variant;
-  var
-    val : PPyObject;
-  begin
-    val := PySequence_GetItem( sequence, idx );
-    try
-      Result := PyObjectAsVariant( val );
-    finally
-      Py_XDecRef( val );
-    end;
-  end;
-
 var
   i, seq_length : Integer;
 begin
@@ -6091,7 +6051,8 @@ begin
       Exit;
 
     // The second argument is the size of the destination (Result) including #0
-    NewSize := Utf8ToUnicode(PChar(Result), Cardinal(Size + 1), Buffer, Cardinal(Size));
+    NewSize := Utf8ToUnicode(PWideChar(Result), Cardinal(Size + 1), Buffer, Cardinal(Size));
+
     // NewSize includes #0
     SetLength(Result, NewSize - 1);
   end
@@ -6395,6 +6356,10 @@ end;
 
 destructor TEngineClient.Destroy;
 begin
+  // if the client is destroyed before the Python Engine then
+  // we need to finalize it.  Otherwise it will already be finalized
+  if FInitialized then
+    Finalize;
   Engine := nil; // This detaches the client from the Engine.
   if Assigned( FOnDestroy ) then
     FOnDestroy( Self );
@@ -8684,7 +8649,8 @@ end;
 
 procedure TPythonType.Finalize;
 begin
-  Engine.Py_CLEAR(FCreateFunc);
+  if Assigned(Engine) then
+    Engine.Py_CLEAR(FCreateFunc);
   FCreateFunc := nil;
   inherited;
 end;

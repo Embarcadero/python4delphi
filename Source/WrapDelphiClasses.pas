@@ -1,3 +1,16 @@
+(**************************************************************************)
+(*  This unit is part of the Python for Delphi (P4D) library              *)
+(*  Project home: https://github.com/pyscripter/python4delphi             *)
+(*                                                                        *)
+(*  Project Maintainer:  PyScripter (pyscripter@gmail.com)                *)
+(*  Original Authors:    Dr. Dietmar Budelsky (dbudelsky@web.de)          *)
+(*                       Morgan Martinet (https://github.com/mmm-experts) *)
+(*  Core developer:      Lucas Belo (lucas.belo@live.com)                 *)
+(*  Contributors:        See contributors.md at project home              *)
+(*                                                                        *)
+(*  LICENCE and Copyright: MIT (see project home)                         *)
+(**************************************************************************)
+
 {$I Definition.Inc}
 
 unit WrapDelphiClasses;
@@ -5,7 +18,8 @@ unit WrapDelphiClasses;
 interface
 
 uses
-  Classes, SysUtils, PythonEngine, WrapDelphi;
+  Classes, SysUtils, PythonEngine, WrapDelphi
+  {$IFDEF FPC}, bufstream{$ENDIF};
 
 type
   {
@@ -2220,10 +2234,24 @@ begin
   LArgCount := APythonType.Engine.PyTuple_Size(args);
   if (LArgCount = 2) then begin
     if (APythonType.Engine.PyArg_ParseTupleAndKeywords(args, kwds, 'sH|i:Create', @LKwArgs1[0], @LFileName, @LMode, @LBufferSize) <> 0) then
+    {$IFDEF FPC}
+    begin
+      DelphiObject := TBufferedFileStreamClass(DelphiObjectClass).Create(String(LFileName), LMode);
+      DelphiObject.Size:= LBufferSize;
+    end;
+    {$ELSE}
       DelphiObject := TBufferedFileStreamClass(DelphiObjectClass).Create(String(LFileName), LMode, LBufferSize);
+    {$ENDIF}
   end else if (LArgCount = 3) then begin
     if (APythonType.Engine.PyArg_ParseTupleAndKeywords(args, kwds, 'sHI|i:Create', @LKwArgs2[0], @LFileName, @LMode, @LRights, @LBufferSize) <> 0) then
+    {$IFDEF FPC}
+    begin
+      DelphiObject := TBufferedFileStreamClass(DelphiObjectClass).Create(String(LFileName), LMode, LRights);
+      DelphiObject.Size:= LBufferSize;
+    end;
+    {$ELSE}
       DelphiObject := TBufferedFileStreamClass(DelphiObjectClass).Create(String(LFileName), LMode, LRights, LBufferSize);
+    {$ENDIF}
   end;
 
   //Maybe it was created on the next attempt...
@@ -2385,14 +2413,14 @@ begin
     {$ELSE}
     if APythonType.Engine.PyArg_ParseTuple(args, 'Iss:Create', @LHandle, @LResName, @LResType) <> 0 then
     {$ENDIF}
-      DelphiObject := TResourceStreamClass(DelphiObjectClass).Create(LHandle, String(LResName), PWideChar(String(LResType)))
+    DelphiObject := TResourceStreamClass(DelphiObjectClass).Create(LHandle, String(LResName), PChar(String(LResType)))
     else
     {$IFDEF CPUX64}
     if APythonType.Engine.PyArg_ParseTuple(args, 'Kis:Create', @LHandle, @LResId, @LResType) <> 0 then
     {$ELSE}
     if APythonType.Engine.PyArg_ParseTuple(args, 'Iis:Create', @LHandle, @LResId, @LResType) <> 0 then
     {$ENDIF}
-      DelphiObject := TResourceStreamClass(DelphiObjectClass).CreateFromID(LHandle, LResId, PWideChar(String(LResType)));
+    DelphiObject := TResourceStreamClass(DelphiObjectClass).CreateFromID(LHandle, LResId, PChar(String(LResType)));
   except
     on E: Exception do
       with GetPythonEngine do

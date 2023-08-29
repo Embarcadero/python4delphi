@@ -1,3 +1,16 @@
+(**************************************************************************)
+(*  This unit is part of the Python for Delphi (P4D) library              *)
+(*  Project home: https://github.com/pyscripter/python4delphi             *)
+(*                                                                        *)
+(*  Project Maintainer:  PyScripter (pyscripter@gmail.com)                *)
+(*  Original Authors:    Dr. Dietmar Budelsky (dbudelsky@web.de)          *)
+(*                       Morgan Martinet (https://github.com/mmm-experts) *)
+(*  Core developer:      Lucas Belo (lucas.belo@live.com)                 *)
+(*  Contributors:        See contributors.md at project home              *)
+(*                                                                        *)
+(*  LICENCE and Copyright: MIT (see project home)                         *)
+(**************************************************************************)
+
 {$I Definition.Inc}
 
 unit WrapDelphiTypes;
@@ -10,9 +23,9 @@ uses
   PythonEngine,
   Types,
   WrapDelphi
-  {$IFDEF DELPHI10_OR_HIGHER}
+  {$IFNDEF FPC}
   , System.UITypes
-  {$ENDIF DELPHI10_OR_HIGHER}
+  {$ENDIF FPC}
   ;
 
 type
@@ -99,9 +112,9 @@ type
   function CheckRectAttribute(AAttribute : PPyObject; const AAttributeName : string; out AValue : TRect) : Boolean;
   function CheckSizeAttribute(AAttribute : PPyObject; const AAttributeName : string; out AValue : TSize) : Boolean;
 
-  {$IFDEF DELPHI10_OR_HIGHER}
+  {$IFNDEF FPC}
   function MouseButtonToPython(const AMouseButton: TMouseButton): PPyObject;
-  {$ENDIF DELPHI10_OR_HIGHER}
+  {$ENDIF FPC}
 
 implementation
 
@@ -122,7 +135,7 @@ type
 procedure TTypesRegistration.DefineVars(APyDelphiWrapper: TPyDelphiWrapper);
 begin
   inherited;
-  {$IFDEF DELPHI10_OR_HIGHER}
+  {$IFNDEF FPC}
   APyDelphiWrapper.DefineVar('crDefault', crDefault);
   APyDelphiWrapper.DefineVar('crNone', crNone);
   APyDelphiWrapper.DefineVar('crArrow', crArrow);
@@ -146,7 +159,7 @@ begin
   APyDelphiWrapper.DefineVar('crHelp', crHelp);
   APyDelphiWrapper.DefineVar('crHandPoint', crHandPoint);
   APyDelphiWrapper.DefineVar('crSizeAll', crSizeAll);
-  {$ENDIF DELPHI10_OR_HIGHER}
+  {$ENDIF FPC}
 end;
 
 function TTypesRegistration.Name: string;
@@ -162,13 +175,13 @@ begin
   APyDelphiWrapper.RegisterHelperType(TPyDelphiSize);
 end;
 
-{$IFDEF DELPHI10_OR_HIGHER}
+{$IFNDEF FPC}
 function MouseButtonToPython(const AMouseButton: TMouseButton): PPyObject;
 begin
   Result := GetPythonEngine.PyUnicodeFromString(
     TRttiEnumerationType.GetName<TMouseButton>(AMouseButton));
 end;
-{$ENDIF DELPHI10_OR_HIGHER}
+{$ENDIF FPC}
 
 { Helper functions }
 
