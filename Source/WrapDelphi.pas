@@ -939,6 +939,7 @@ Type
     procedure Finalize; override;
     procedure DefineVar(const AName : string; const AValue : Variant); overload;
     procedure DefineVar(const AName : string; AValue : TObject); overload;
+    procedure DefineVar(const AName : string; AValue : TClass); overload;
     procedure RegisterDelphiWrapper(AWrapperClass : TPyDelphiObjectClass);
     function  RegisterHelperType(APyObjectClass : TPyObjectClass) : TPythonType;
     function  RegisterFunction(AFuncName : PAnsiChar; AFunc : PyCFunction; ADocString : PAnsiChar ): PPyMethodDef; overload;
@@ -2968,6 +2969,8 @@ begin
         case Prop.PropertyType.TypeKind of
           tkClass:
             Result := PyDelphiWrapper.Wrap(Prop.GetValue(ParentAddr).AsObject);
+          tkClassRef:
+            Result := PyDelphiWrapper.WrapClass(Prop.GetValue(ParentAddr).AsClass);
           tkInterface:
             Result := PyDelphiWrapper.WrapInterface(Prop.GetValue(ParentAddr));
           tkMethod:
@@ -2991,6 +2994,8 @@ begin
           case Field.FieldType.TypeKind of
             tkClass:
               Result := PyDelphiWrapper.Wrap(Field.GetValue(ParentAddr).AsObject);  // Returns None if Field is nil
+            tkClassRef:
+              Result := PyDelphiWrapper.WrapClass(Field.GetValue(ParentAddr).AsClass);  // Returns None if Field is nil
             tkInterface:
               Result := PyDelphiWrapper.WrapInterface(Field.GetValue(ParentAddr));
             tkRecord:
@@ -3021,6 +3026,7 @@ var
   Field: TRttiField;
   V: TValue;
   Obj: TObject;
+  Cls: TClass;
   ValueOut: TValue;
 begin
   Result := False;
@@ -3039,6 +3045,11 @@ begin
         tkClass:
           if ValidateClassProperty(Value, Prop.PropertyType.Handle, Obj, ErrMsg) then begin
             Prop.SetValue(ParentAddr, Obj);
+            Result := True;
+          end;
+        tkClassRef:
+          if ValidateClassRef(Value, Prop.PropertyType.Handle, Cls, ErrMsg) then begin
+            Prop.SetValue(ParentAddr, Cls);
             Result := True;
           end;
         tkInterface:
@@ -3084,6 +3095,11 @@ begin
           tkClass:
             if ValidateClassProperty(value, Field.FieldType.Handle, Obj, ErrMsg) then begin
               Field.SetValue(ParentAddr, Obj);
+              Result := True;
+            end;
+          tkClassRef:
+            if ValidateClassRef(value, Field.FieldType.Handle, Cls, ErrMsg) then begin
+              Field.SetValue(ParentAddr, Cls);
               Result := True;
             end;
           tkInterface:
@@ -4950,6 +4966,16 @@ begin
   _obj := Wrap(AValue);
   Module.SetVar(AnsiString(AName), _obj);
   Engine.Py_DECREF(_obj);
+end;
+
+procedure TPyDelphiWrapper.DefineVar(const AName: string; AValue: TClass);
+var
+  LObj: PPyObject;
+begin
+  Assert(Assigned(Module));
+  LObj := WrapClass(AValue);
+  Module.SetVar(AnsiString(AName), LObj);
+  Engine.Py_DECREF(LObj);
 end;
 
 destructor TPyDelphiWrapper.Destroy;
