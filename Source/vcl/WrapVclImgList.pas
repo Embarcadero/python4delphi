@@ -10,7 +10,7 @@
 (*                                                                        *)
 (*  LICENCE and Copyright: MIT (see project home)                         *)
 (**************************************************************************)
-{$I Definition.Inc}
+{$I ..\Definition.Inc}
 
 unit WrapVclImgList;
 
