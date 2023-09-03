@@ -961,7 +961,7 @@ Type
     //  Note the the interface must be compiled in {$M+} mode and have a guid
     //  Usage: WrapInterface(TValue.From(YourInterfaceReference))
     //  Warning: WrapInterface represents a weak (uncounted) reference!
-    //           Use WrapInterfaceCopy to retrieve a normal counted reference
+    //           Use ACopy = True to retrieve a normal counted reference
     //           that will keep the interface alive as long as python has a
     //           reference to it.
     function WrapInterface(const IValue: TValue; const ACopy: boolean = false): PPyObject;
@@ -3341,8 +3341,8 @@ end;
 
 function TPyPascalRecord.GetValue: TValue;
 begin
-  if Assigned(fCopy) then
-    Result := fCopy^
+  if Assigned(FCopy) then
+    Result := FCopy^
   else
     TValue.Make(fAddr, RttiType.Handle, Result);
 end;
@@ -3358,8 +3358,8 @@ end;
 
 function TPyPascalInterface.GetValue: TValue;
 begin
-  if Assigned(fCopy) then
-    Result := fCopy^
+  if Assigned(FCopy) then
+    Result := FCopy^
   else
     TValue.Make(@fAddr, RttiType.Handle, Result);
 end;
