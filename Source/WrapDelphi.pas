@@ -987,7 +987,7 @@ Type
     FPyDelphiWrapper: TPyDelphiWrapper;
     FPythonType: TPythonType;
   protected
-    function GetDocString(): string; virtual; abstract;
+    function GetDefaultDocString(): string; virtual; abstract;
   public
     constructor Create(AOwner: TComponent; const AName: string;
       const APyDelphiWrapper: TPyDelphiWrapper; const APythonType: TPythonType); reintroduce;
@@ -996,6 +996,58 @@ Type
     property DocString: AnsiString read FDocString write FDocString;
     property PyDelphiWrapper: TPyDelphiWrapper read FPyDelphiWrapper write FPyDelphiWrapper;
     property PythonType: TPythonType read FPythonType write FPythonType;
+  end;
+
+  /// <summary>
+  ///   Using standard function signature for methods.
+  ///   Signature is a string of the format
+  ///     <function_name>(<signature>) -> <return type>
+  ///   or perhaps without the return type.
+
+  ///   Using Google Docstrings Style for fields and properties. It is a string of the format
+  ///     <type: docstring>
+  ///   See: https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html
+  /// </summary>
+  TExposedMemberDocStringsBuilder = class
+  private
+    class function TranslateType(const ARttiObject: TRttiObject): string;
+    /// <summary>
+    ///   Creates method annotation for type inference in doc. strings.
+    /// </summary>
+    class function GetMethodTypeAnnotation(
+      const ARttiMethod: TRttiMethod): string;
+    /// <summary>
+    ///   Creates field annotation for type inference in doc. strings.
+    /// </summary>
+    class function GetFieldTypeAnnotation(const ARttiField: TRttiField): string;
+    /// <summary>
+    ///   Creates property annotation for type inference in doc. strings.
+    /// </summary>
+    class function GetPropertyTypeAnnotation(
+      const ARttiProperty: TRttiProperty): string;
+    /// <summary>
+    ///   Creates indexed property annotation for type inference in doc. strings.
+    /// </summary>
+    class function GetIndexedPropertyTypeAnnotation(
+      const ARttiIndexedProperty: TRttiIndexedProperty): string;
+  public
+    /// <summary>
+    ///   Creates member annotation for type inference in doc. strings.
+    /// </summary>
+    class function GetTypeAnnotation(const ARttiMember: TRttiMember): string;
+    /// <summary>
+    ///   Query the doc. server to read member docs.
+    /// </summary>
+    class function GetDocStringFromDocServer(const AParentInfo: PTypeInfo;
+      const ARttiMember: TRttiMember): string;
+    /// <summary>
+    ///   Join docstring and type annotation.
+    /// </summary>
+    class function BuildDocs(const ADocString, ATypeAnnotation: string): string; overload;
+    /// <summary>
+    ///   Join doc. server doc. strings and type annotation.
+    /// </summary>
+    class function BuildDocs(const ARttiMember: TRttiMember): string; overload;
   end;
 
   {$IFDEF EXPOSE_MEMBERS}
@@ -1009,7 +1061,7 @@ Type
     FIsClassMethod: boolean;
     fIsStaticMethod: boolean;
   protected
-    function GetDocString(): string; override;
+    function GetDefaultDocString(): string; override;
   public
     constructor Create(AOwner: TComponent; const AName: string;
       const APyDelphiWrapper: TPyDelphiWrapper; const APythonType: TPythonType;
@@ -1020,7 +1072,6 @@ Type
 
     function VirtualMethodImplementation(): pointer;
 
-    class function MethodDocStr(const ARttiMethod: TRttiMethod): string;
     class function Methods_Wrapper(const ASelf, AArgs, AKeyWords: PPyObject): PPyObject; static; cdecl;
 
     property MethodHandler: TExposedMethodHandler read FMethodHandler write FMethodHandler;
@@ -1054,12 +1105,12 @@ Type
 
   TExposedFieldImplementation = class(TExposedGetSetImplementation)
   protected
-    function GetDocString(): string; override;
+    function GetDefaultDocString(): string; override;
   end;
 
   TExposedPropertyImplementation = class(TExposedGetSetImplementation)
   protected
-    function GetDocString(): string; override;
+    function GetDefaultDocString(): string; override;
   end;
 
   TExposedIndexedPropertyImplementation = class(TAbstractExposedMemberImplementation)
@@ -1098,7 +1149,7 @@ Type
     FRttiType: TRttiType;
   protected
     function GetAccessClass: TIndexedPropertyAccessClass; virtual;
-    function GetDocString(): string; override;
+    function GetDefaultDocString(): string; override;
   public
     constructor Create(AOwner: TComponent; const AName: string;
       const APyDelphiWrapper: TPyDelphiWrapper; const APythonType: TPythonType;
@@ -1224,12 +1275,200 @@ constructor TAbstractExposedMemberImplementation.Create(AOwner: TComponent;
 begin
   inherited Create(AOwner);
   FName := AnsiString(AName);
-  FDocString := AnsiString(GetDocString());
+  FDocString := AnsiString(GetDefaultDocString());
   FPyDelphiWrapper := APyDelphiWrapper;
   FPythonType := APythonType;
 end;
 
+{ TExposedMemberDocStringsBuilder }
+
+class function TExposedMemberDocStringsBuilder.TranslateType(
+  const ARttiObject: TRttiObject): string;
+
+  function TranslateMethod(const ARttiMethod: TRttiMethod): string;
+  const
+    METHOD_DOC_STR_PATTERN = 'Callable[[%s], %s]';
+  var
+    LParams: TArray<string>;
+    LParam: TRttiParameter;
+  begin
+    LParams := nil;
+    for LParam in ARttiMethod.GetParameters() do
+      LParams := LParams + [TranslateType(LParam.ParamType)];
+
+    Result := Format(METHOD_DOC_STR_PATTERN, [
+      String.Join(', ', LParams),
+      TranslateType(ARttiMethod.ReturnType)]);
+  end;
+
+  function TranslateInvokable(const ARttiInvokableType: TRttiInvokableType): string;
+  const
+    INVOKABLE_DOC_STR_PATTERN = 'Callable[[%s], %s]';
+  var
+    LParams: TArray<string>;
+    LParam: TRttiParameter;
+  begin
+    LParams := nil;
+    for LParam in ARttiInvokableType.GetParameters() do
+      LParams := LParams + [TranslateType(LParam.ParamType)];
+
+    Result := Format(INVOKABLE_DOC_STR_PATTERN, [
+      String.Join(', ', LParams),
+      TranslateType(ARttiInvokableType.ReturnType)]);
+  end;
+
+begin
+  if not Assigned(ARttiObject) then
+    Result := 'None'
+  else if PTypeInfo(TypeInfo(boolean)) = ARttiObject.Handle then
+    Result := 'bool'
+  else if ARttiObject.InheritsFrom(TRttiMethod) then
+    Result := TranslateMethod(ARttiObject as TRttiMethod)
+  else if ARttiObject.InheritsFrom(TRttiInvokableType) then
+    Result := TranslateInvokable(ARttiObject as TRttiInvokableType)
+  else if ARttiObject.InheritsFrom(TRttiType) then
+    case TRttiType(ARttiObject).TypeKind of
+      tkUnknown,
+      tkVariant,
+      tkSet, tkEnumeration,
+      tkClass, tkMethod, tkProcedure, tkClassRef, tkPointer,
+      tkRecord, tkMRecord,
+      tkInterface:
+        Result := TRttiType(ARttiObject).Name.Replace('T', '', []);
+      tkInteger, tkInt64:
+        Result := 'int';
+      tkChar:
+        Result := 'ansichr(bytes)';
+      tkWChar:
+        Result := 'unicodechr(str)';
+      tkFloat:
+        Result := 'float';
+      tkString, tkUString, tkWString:
+        Result := 'str';
+      tkLString:
+        Result := 'ansistr(bytes)';
+      tkArray, tkDynArray:
+        Result := 'tuple';
+    end;
+end;
+
+class function TExposedMemberDocStringsBuilder.GetMethodTypeAnnotation(
+  const ARttiMethod: TRttiMethod): string;
+const
+  METHOD_DOC_STR_PATTERN = '%s.%s(%s)';
+var
+  LArgsStr: string;
+  LRttiParameter: TRttiParameter;
+begin
+  if (Length(ARttiMethod.GetParameters) = 0) then
+    Exit(String.Empty);
+
+  LArgsStr := String.Empty;
+  for LRttiParameter in ARttiMethod.GetParameters do begin
+    if not LArgsStr.IsEmpty then
+      LArgsStr := LArgsStr + ', ';
+
+    if not Assigned(LRttiParameter.ParamType) then
+      LArgsStr := LArgsStr + LRttiParameter.Name
+    else
+      LArgsStr := LArgsStr
+        + LRttiParameter.Name
+        + ': '
+        + TranslateType(LRttiParameter.ParamType);
+  end;
+
+  Result := String.Format(METHOD_DOC_STR_PATTERN, [
+    ARttiMethod.Parent.Name, ARttiMethod.Name, LArgsStr]);
+
+  if Assigned(ARttiMethod.ReturnType) then
+    Result := Result
+      + ' -> '
+      + TranslateType(ARttiMethod.ReturnType)
+  else
+    Result := Result + ' -> None';
+
+  if not Result.IsEmpty() then
+    Result := Result + #10;
+end;
+
+class function TExposedMemberDocStringsBuilder.GetFieldTypeAnnotation(
+  const ARttiField: TRttiField): string;
+const
+  FIELD_DOC_STR_PATTERN = '%s: ';
+begin
+  Result := Format(FIELD_DOC_STR_PATTERN, [
+    TranslateType(TRttiField(ARttiField).FieldType)]);
+end;
+
+class function TExposedMemberDocStringsBuilder.GetPropertyTypeAnnotation(
+  const ARttiProperty: TRttiProperty): string;
+const
+  PROPERTY_DOC_STR_PATTERN = '%s: ';
+begin
+  Result := Format(PROPERTY_DOC_STR_PATTERN, [
+    TranslateType(ARttiProperty.PropertyType)]);
+end;
+
+class function TExposedMemberDocStringsBuilder.GetIndexedPropertyTypeAnnotation(
+  const ARttiIndexedProperty: TRttiIndexedProperty): string;
+const
+  INDEXED_PROPERTY_DOC_STR_PATTERN = '%s: ';
+begin
+  Result := Format(INDEXED_PROPERTY_DOC_STR_PATTERN, [
+    TranslateType(ARttiIndexedProperty.PropertyType)]);
+end;
+
+class function TExposedMemberDocStringsBuilder.GetTypeAnnotation(
+  const ARttiMember: TRttiMember): string;
+begin
+  if ARttiMember.InheritsFrom(TRttiMethod) then
+    Result := GetMethodTypeAnnotation(TRttiMethod(ARttiMember))
+  else if ARttiMember.InheritsFrom(TRttiField) then
+    Result := GetFieldTypeAnnotation(TRttiField(ARttiMember))
+  else if ARttiMember.InheritsFrom(TRttiProperty) then
+    Result := GetPropertyTypeAnnotation(TRttiProperty(ARttiMember))
+  else if ARttiMember.InheritsFrom(TRttiIndexedProperty) then
+    Result := GetIndexedPropertyTypeAnnotation(TRttiIndexedProperty(ARttiMember))
+  else
+    Result := String.Empty;
+end;
+
+class function TExposedMemberDocStringsBuilder.GetDocStringFromDocServer(
+  const AParentInfo: PTypeInfo; const ARttiMember: TRttiMember): string;
+begin
+  if not Assigned(AParentInfo) then
+    Result := String.Empty
+  else
+    if not TPythonDocServer.Instance.ReadMemberDocStr(AParentInfo, ARttiMember, Result) then
+      if not Assigned(GetTypeData(AParentInfo)^.ParentInfo) then
+        Result := String.Empty
+      else
+        Result := GetDocStringFromDocServer(GetTypeData(AParentInfo)^.ParentInfo^, ARttiMember);
+end;
+
+class function TExposedMemberDocStringsBuilder.BuildDocs(const ADocString,
+  ATypeAnnotation: string): string;
+begin
+  //We only have the docstring
+  if ATypeAnnotation.IsEmpty() then
+    Result := ADocString
+  //We only have the type annotation
+  else if ADocString.IsEmpty() then
+    Result := ATypeAnnotation
+  //We have both values
+  else
+    Result := ATypeAnnotation + ADocString;
+end;
+
+class function TExposedMemberDocStringsBuilder.BuildDocs(
+  const ARttiMember: TRttiMember): string;
+begin
+  Result := BuildDocs(
+    GetDocStringFromDocServer(ARttiMember.Parent.Handle, ARttiMember),
+    GetTypeAnnotation(ARttiMember));
+end;
 {$IFDEF EXPOSE_MEMBERS}
+
 { TExposedMethodImplementation }
 
 constructor TExposedMethodImplementation.Create(AOwner: TComponent;
@@ -1271,46 +1510,10 @@ begin
   inherited;
 end;
 
-function TExposedMethodImplementation.GetDocString(): string;
+function TExposedMethodImplementation.GetDefaultDocString(): string;
 begin
   Result := Format('<Delphi method %s of type %s at %x>', [
     Name, FRttiType.Name, NativeInt(Self)]);
-end;
-
-class function TExposedMethodImplementation.MethodDocStr
-(const ARttiMethod: TRttiMethod): string;
-const
-  METHOD_DOC_STR_PATTERN = '%s.%s(%s)';
-var
-  LArgsStr: string;
-  LRttiParameter: TRttiParameter;
-begin
-  if (Length(ARttiMethod.GetParameters) = 0) then
-    Exit(String.Empty);
-
-  LArgsStr := String.Empty;
-  for LRttiParameter in ARttiMethod.GetParameters do begin
-    if not LArgsStr.IsEmpty then
-      LArgsStr := LArgsStr + ', ';
-
-    if not Assigned(LRttiParameter.ParamType) then
-      LArgsStr := LArgsStr + LRttiParameter.Name
-    else
-      LArgsStr := LArgsStr
-        + LRttiParameter.Name
-        + ': '
-        + LRttiParameter.ParamType.Name.Replace('T', '', []);
-  end;
-
-  Result := String.Format(METHOD_DOC_STR_PATTERN, [
-    ARttiMethod.Parent.Name, ARttiMethod.Name, LArgsStr]);
-
-  if Assigned(ARttiMethod.ReturnType) then
-    Result := Result
-      + ' -> '
-      + ARttiMethod.ReturnType.Name.Replace('T', '', []);
-
-  Result := Result + #10;
 end;
 
 function TExposedMethodImplementation.VirtualMethodImplementation(): pointer;
@@ -1507,7 +1710,7 @@ begin
   Result := TIndexedPropertyAccess;
 end;
 
-function TExposedIndexedPropertyImplementation.GetDocString: string;
+function TExposedIndexedPropertyImplementation.GetDefaultDocString: string;
 begin
   Result := Format('<Delphi indexed property %s of type %s at %x>', [
     Name, FRttiType.Name, NativeInt(Self)]);
@@ -1687,7 +1890,7 @@ end;
 
 { TExposedFieldImplementation }
 
-function TExposedFieldImplementation.GetDocString(): string;
+function TExposedFieldImplementation.GetDefaultDocString(): string;
 begin
   Result := Format('<Delphi field %s of type %s at %x>', [
     Name, FRttiType.Name, NativeInt(Self)]);
@@ -1695,7 +1898,7 @@ end;
 
 { TExposedPropertyImplementation }
 
-function TExposedPropertyImplementation.GetDocString(): string;
+function TExposedPropertyImplementation.GetDefaultDocString(): string;
 begin
   Result := Format('<Delphi property %s of type %s at %x>', [
     Name, FRttiType.Name, NativeInt(Self)]);
@@ -3947,8 +4150,6 @@ var
   LRttiElectedMethods: TArray<TRttiMethod>;
   LBuffer: TArray<string>;
   LExposedMethod: TExposedMethodImplementation;
-  LClass: TClass;
-  LDocStr: string;
 begin
   SetLength(LBuffer, 0);
   LRttiCtx := TRttiContext.Create();
@@ -4001,20 +4202,9 @@ begin
       SetLength(LBuffer, Length(LBuffer) + 1);
       LBuffer[Length(LBuffer) - 1] := LRttiMethod.Name;
 
-      //Try to load the method doc string from doc server
-      LClass := DelphiObjectClass;
-      LDocStr := String.Empty;
-      while Assigned(LClass) and LDocStr.IsEmpty() do begin
-        if TPythonDocServer.Instance.ReadMemberDocStr(
-          LClass.ClassInfo, LRttiMethod, LDocStr) then
-            LExposedMethod.DocString := AnsiString(LDocStr);
-        LClass := LClass.ClassParent;
-      end;
-
-      //Build the DocStr including method args
-      LExposedMethod.DocString :=
-        AnsiString(TExposedMethodImplementation.MethodDocStr(LRttiMethod))
-        + LExposedMethod.DocString;
+      //Build the DocStr
+      LExposedMethod.DocString := AnsiString(
+        TExposedMemberDocStringsBuilder.BuildDocs(LRttiMethod));
 
       //Adds the Python method
       if LRttiMethod.IsStatic then
@@ -4050,8 +4240,6 @@ var
   LRttiElectedProperties: TArray<TRttiProperty>;
   LBuffer: TArray<string>;
   LExposedProperty: TExposedPropertyImplementation;
-  LClass: TClass;
-  LDocStr: string;
 begin
   SetLength(LBuffer, 0);
   LRttiCtx := TRttiContext.Create();
@@ -4103,15 +4291,9 @@ begin
       SetLength(LBuffer, Length(LBuffer) + 1);
       LBuffer[Length(LBuffer) - 1] := LRttiProperty.Name;
 
-      //Try to load the property doc string from doc server
-      LClass := DelphiObjectClass;
-      LDocStr := String.Empty;
-      while Assigned(LClass) and LDocStr.IsEmpty() do begin
-        if TPythonDocServer.Instance.ReadMemberDocStr(
-          LClass.ClassInfo, LRttiProperty, LDocStr) then
-            LExposedProperty.DocString := AnsiString(LDocStr);
-        LClass := LClass.ClassParent;
-      end;
+      //Build the DocStr
+      LExposedProperty.DocString := AnsiString(
+        TExposedMemberDocStringsBuilder.BuildDocs(LRttiProperty));
 
       //Adds the Python attribute
       APythonType.AddGetSet(
@@ -4127,11 +4309,11 @@ begin
 end;
 
 class procedure TPyDelphiObject.ExposeIndexedProperties(const AClass: TClass;
-      const APythonType: TPythonType; const APyDelphiWrapper: TPyDelphiWrapper;
-      const ADeclaredPropertiesOnly: boolean = false;
-      const AIncludedPropertyNames: TArray<string> = [];
-      const AExcludedPropertyNames: TArray<string> = [];
-      const ADefCallback: TExposedIndexedPropertyDefCallback = nil);
+  const APythonType: TPythonType; const APyDelphiWrapper: TPyDelphiWrapper;
+  const ADeclaredPropertiesOnly: boolean = false;
+  const AIncludedPropertyNames: TArray<string> = [];
+  const AExcludedPropertyNames: TArray<string> = [];
+  const ADefCallback: TExposedIndexedPropertyDefCallback = nil);
 var
   LRttiCtx: TRttiContext;
   LRttiType: TRttiType;
@@ -4140,8 +4322,6 @@ var
   LRttiElectedProperties: TArray<TRttiIndexedProperty>;
   LBuffer: TArray<string>;
   LExposedProperty: TExposedIndexedPropertyImplementation;
-  LClass: TClass;
-  LDocStr: string;
 begin
   SetLength(LBuffer, 0);
   LRttiCtx := TRttiContext.Create();
@@ -4200,15 +4380,9 @@ begin
       SetLength(LBuffer, Length(LBuffer) + 1);
       LBuffer[Length(LBuffer) - 1] := LRttiProperty.Name;
 
-      //Try to load the property doc string from doc server
-      LClass := DelphiObjectClass;
-      LDocStr := String.Empty;
-      while Assigned(LClass) and LDocStr.IsEmpty() do begin
-        if TPythonDocServer.Instance.ReadMemberDocStr(
-          LClass.ClassInfo, LRttiProperty, LDocStr) then
-            LExposedProperty.DocString := AnsiString(LDocStr);
-        LClass := LClass.ClassParent;
-      end;
+      //Build the DocStr
+      LExposedProperty.DocString := AnsiString(
+        TExposedMemberDocStringsBuilder.BuildDocs(LRttiProperty));
 
       //Adds the Python attribute
       APythonType.AddGetSet(
@@ -4235,8 +4409,6 @@ var
   LRttiElectedFields: TArray<TRttiField>;
   LBuffer: TArray<string>;
   LExposedField: TExposedFieldImplementation;
-  LClass: TClass;
-  LDocStr: string;
 begin
   SetLength(LBuffer, 0);
   LRttiCtx := TRttiContext.Create();
@@ -4288,15 +4460,9 @@ begin
       SetLength(LBuffer, Length(LBuffer) + 1);
       LBuffer[Length(LBuffer) - 1] := LRttiField.Name;
 
-      //Try to load the property doc string from doc server
-      LClass := DelphiObjectClass;
-      LDocStr := String.Empty;
-      while Assigned(LClass) and LDocStr.IsEmpty() do begin
-        if TPythonDocServer.Instance.ReadMemberDocStr(
-          LClass.ClassInfo, LRttiField, LDocStr) then
-            LExposedField.DocString := AnsiString(LDocStr);
-        LClass := LClass.ClassParent;
-      end;
+      //Build the DocStr
+      LExposedField.DocString := AnsiString(
+        TExposedMemberDocStringsBuilder.BuildDocs(LRttiField));
 
       //Adds the Python attribute
       APythonType.AddGetSet(
