@@ -644,6 +644,11 @@ Type
     class procedure SetupType( PythonType : TPythonType ); override;
     // Expose methods, properties and fields via RTTI at definition time
     {$IFDEF EXPOSE_MEMBERS}
+    class function GetExcludedExposeMethods(
+      const APythonType: TPythonType): TArray<string>; virtual;
+    class function GetExcludedExposeGettersSetters(
+      const APythonType: TPythonType): TArray<string>; virtual;
+
     class procedure ExposeMethods(const AClass: TClass;
       const APythonType: TPythonType; const APyDelphiWrapper: TPyDelphiWrapper;
       const ADeclaredMethodsOnly: boolean = false;
@@ -668,6 +673,9 @@ Type
       const AIncludedFieldNames: TArray<string> = [];
       const AExcludedFieldNames: TArray<string> = [];
       const ADefCallback: TExposedFieldDefCallback = nil); virtual;
+
+    class procedure DynamicallyExposeMembers(const APythonType: TPythonType;
+      const APyDelphiWrapper: TPyDelphiWrapper);
     {$ENDIF EXPOSE_MEMBERS}
     // if the class is a container (TStrings, TComponent, TCollection...),
     // then return the class implementing the access to the contained items.
@@ -4101,9 +4109,6 @@ end;
 class procedure TPyDelphiObject.SetupType(PythonType: TPythonType);
 var
   _ContainerAccessClass : TContainerAccessClass;
-  {$IFDEF EXPOSE_MEMBERS}
-  LDocStr: string;
-  {$ENDIF EXPOSE_MEMBERS}
 begin
   inherited;
   PythonType.TypeName := AnsiString(GetTypeName);
@@ -4121,23 +4126,31 @@ begin
     if _ContainerAccessClass.SupportsIndexOf then
       PythonType.Services.Sequence := PythonType.Services.Sequence + [ssContains];
   end;
-
-  {$IFDEF EXPOSE_MEMBERS}
-  PythonType.TypeFlags := PythonType.TypeFlags + [TPFlag.tpTypeSubclass];
-
-  //Try to load the class doc string from doc server
-  if TPythonDocServer.Instance.ReadTypeDocStr(DelphiObjectClass.ClassInfo, LDocStr) then
-    PythonType.DocString.Text := LDocStr;
-
-  ExposeMethods(DelphiObjectClass, PythonType,PythonType.Owner as TPyDelphiWrapper,
-    true, [], ['CPP_ABI_1', 'CPP_ABI_2', 'CPP_ABI_3']);
-  ExposeFields(DelphiObjectClass, PythonType, PythonType.Owner as TPyDelphiWrapper, true);
-  ExposeProperties(DelphiObjectClass, PythonType, PythonType.Owner as TPyDelphiWrapper, true);
-  ExposeIndexedProperties(DelphiObjectClass, PythonType, PythonType.Owner as TPyDelphiWrapper, true);
-  {$ENDIF EXPOSE_MEMBERS}
 end;
 
 {$IFDEF EXPOSE_MEMBERS}
+class function TPyDelphiObject.GetExcludedExposeMethods(
+  const APythonType: TPythonType): TArray<string>;
+var
+  I: integer;
+begin
+  Result := ['CPP_ABI_1', 'CPP_ABI_2', 'CPP_ABI_3'];
+  //Any method manually wrapped must be excluded
+  for I := 0 to APythonType.MethodCount - 1 do
+    Result := Result + [String(APythonType.Methods[I].ml_name)];
+end;
+
+class function TPyDelphiObject.GetExcludedExposeGettersSetters(
+  const APythonType: TPythonType): TArray<string>;
+var
+  I: integer;
+begin
+  Result := [];
+  //Any field, property or indexed property manually wrapped must be excluded
+  for I := 0 to APythonType.GetSetCount - 1 do
+    Result := Result + [String(APythonType.GetSet[I].name)];
+end;
+
 class procedure TPyDelphiObject.ExposeMethods(const AClass: TClass;
   const APythonType: TPythonType; const APyDelphiWrapper: TPyDelphiWrapper;
   const ADeclaredMethodsOnly: boolean; const AIncludedMethodNames,
@@ -4476,6 +4489,38 @@ begin
     LRttiCtx.Free;
   end;
 end;
+
+class procedure TPyDelphiObject.DynamicallyExposeMembers(
+  const APythonType: TPythonType; const APyDelphiWrapper: TPyDelphiWrapper);
+var
+  LDocStr: string;
+  LExcludedMethods: TArray<string>;
+  LExcludedGettersAndSetters: TArray<string>;
+  LDelphiObjectClass: TClass;
+begin
+  APythonType.TypeFlags := APythonType.TypeFlags + [TPFlag.tpTypeSubclass];
+
+  LDelphiObjectClass := TPyDelphiObjectClass(APythonType.PyObjectClass).DelphiObjectClass;
+
+  //Try to load the class doc string from doc server
+  if TPythonDocServer.Instance.ReadTypeDocStr(LDelphiObjectClass.ClassInfo, LDocStr) then
+    APythonType.DocString.Text := LDocStr;
+
+  //Get excluded methods manually wrapped
+  LExcludedMethods := GetExcludedExposeMethods(APythonType);
+  //Get excluded fields, porperties and indexed properties manually wrapped
+  LExcludedGettersAndSetters := GetExcludedExposeGettersSetters(APythonType);
+
+  ExposeMethods(LDelphiObjectClass, APythonType, APyDelphiWrapper, true,
+    [], LExcludedMethods);
+  ExposeFields(LDelphiObjectClass, APythonType, APyDelphiWrapper, true,
+    [], LExcludedGettersAndSetters);
+  ExposeProperties(LDelphiObjectClass, APythonType, APyDelphiWrapper, true,
+    [], LExcludedGettersAndSetters);
+  ExposeIndexedProperties(LDelphiObjectClass, APythonType, APyDelphiWrapper, true,
+    [], LExcludedGettersAndSetters);
+end;
+
 {$ENDIF EXPOSE_MEMBERS}
 
 function TPyDelphiObject.Set_Owned(AValue: PPyObject;
@@ -5352,6 +5397,12 @@ begin
   RegisteredClass.PythonType.Engine := Engine;
   RegisteredClass.PythonType.Module := fModule;
   RegisteredClass.PythonType.PyObjectClass := AWrapperClass;
+
+  {$IFDEF EXPOSE_MEMBERS}
+  //Must run after manually wrapped members
+  TPyDelphiObject.DynamicallyExposeMembers(RegisteredClass.PythonType, Self);
+  {$ENDIF EXPOSE_MEMBERS}
+
   // Find nearest registered parent class and set it as base
   for Index := fClassRegister.Count - 1 downto 0 do
     with TRegisteredClass(fClassRegister[Index]) do
