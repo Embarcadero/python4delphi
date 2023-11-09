@@ -1264,7 +1264,6 @@ type
     function MethodWrapper(ASelf, Args, Kwds: PPyObject): PPyObject; cdecl;
     property RttiMethod: TRttiMethod read GetRttiMethod;
     property Callback: Pointer read GetCallback;
-    class function MethodDocStr(ARttiMethod: TRttiMethod): string;
   end;
 
   TExposedGetSet = class(TAbstractExposedMember)
@@ -1437,35 +1436,6 @@ begin
     Args,
     Kwds,
     RttiMethod.IsStatic or RttiMethod.IsClassMethod);
-end;
-
-class function TExposedMethod.MethodDocStr(ARttiMethod: TRttiMethod): string;
-const
-  METHOD_DOC_STR_PATTERN = '%s.%s(%s)';
-var
-  LArgsStr: string;
-  LRttiParameter: TRttiParameter;
-begin
-  LArgsStr := '';
-  for LRttiParameter in ARttiMethod.GetParameters do begin
-    if LArgsStr <> '' then
-      LArgsStr := LArgsStr + ', ';
-
-    LArgsStr := LArgsStr + LRttiParameter.Name;
-    if Assigned(LRttiParameter.ParamType) then
-      LArgsStr := LArgsStr + ': ' +
-        LRttiParameter.ParamType.Name.Replace('T', '', []);
-  end;
-
-  Result := Format(METHOD_DOC_STR_PATTERN,
-    [ARttiMethod.Parent.Name, ARttiMethod.Name, LArgsStr]);
-
-  if Assigned(ARttiMethod.ReturnType) then
-    Result := Result
-      + ' -> '
-      + ARttiMethod.ReturnType.Name.Replace('T', '', []);
-
-  Result := Result + #10;
 end;
 
 { TExposedGetSet }
@@ -4137,11 +4107,6 @@ begin
         PyDocServer.ReadMemberDocStr(LRttiMethod, LDocStr)
       then
         LExposedMethod.DocString := AnsiString(LDocStr);
-
-      //Build the DocStr including method args
-      LExposedMethod.DocString :=
-        Utf8Encode(TExposedMethod.MethodDocStr(LRttiMethod)) +
-        LExposedMethod.DocString;
 
       // Keep it alive until the Wrapper is Finalized
       APyDelphiWrapper.fExposedMembers.Add(LExposedMethod);
