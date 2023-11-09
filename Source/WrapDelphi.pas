@@ -1051,8 +1051,9 @@ resourcestring
   rs_ErrNoTypeInfo = 'TypeInfo is not available';
   rs_ErrUnexpected = 'Unexpected error';
 
-
 {$REGION 'TRttiInvokableTypeHelper - "Lifted" from Spring4D"'}
+
+{$IF not Defined(FPC) and Defined(EXTENDED_RTTI) and (CompilerVersion < 36)}
 {***************************************************************************}
 {                                                                           }
 {           Spring Framework for Delphi                                     }
@@ -1197,6 +1198,8 @@ begin
     m.Free;
   end;
 end;
+{$IFEND not Defined(FPC) and Defined(EXTENDED_RTTI) and (CompilerVersion < 36)}
+
 {$ENDREGION 'TRttiInvokableTypeHelper - "Lifted from Spring4D"'}
 
 
