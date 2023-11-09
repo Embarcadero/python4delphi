@@ -27,7 +27,9 @@ type
     FHelpFile: string;
     fSysArchitecture : string;
     function GetDLLName: string;
+    {$IFDEF MSWINDOWS}
     function ExpectedArchitecture:string;
+    {$ENDIF MSWINDOWS}
     function GetIsPython3K: Boolean;
     function GetHelpFile: string;
     function GetDisplayName: string;
@@ -107,6 +109,7 @@ begin
   {$ENDIF}
 end;
 
+{$IFDEF MSWINDOWS}
 function TPythonVersion.ExpectedArchitecture: string;
 begin
   Result := '';
@@ -116,6 +119,7 @@ begin
   if Result = '' then
     Result := '32bit';
 end;
+{$ENDIF MSWINDOWS}
 
 procedure TPythonVersion.AssignTo(PythonEngine: TPersistent);
 begin

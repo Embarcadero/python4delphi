@@ -144,7 +144,7 @@ end;
 
 procedure TThreadSortForm.Start3BtnClick(Sender: TObject);
 begin
-  InitThreads(emNewInterpreter, PythonMemo.Lines);
+  InitThreads(emNewInterpreterOwnGIL, PythonMemo.Lines);
 //PythonEngine1.ExecStrings(PythonMemo.Lines);
 end;
 

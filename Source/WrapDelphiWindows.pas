@@ -20,10 +20,7 @@ interface
 {$IFDEF MSWINDOWS}
 uses
   Windows, Classes, SysUtils, TypInfo, PythonEngine, WrapDelphi, WrapDelphiClasses;
-{$ENDIF MSWINDOWS}
 
-
-{$IFDEF MSWINDOWS}
 function OwnerDrawStateToPython(const AOwnerDrawState: TOwnerDrawState): PPyObject;
 {$ENDIF MSWINDOWS}
 
@@ -36,7 +33,6 @@ uses
   System.Win.HighDpi, Winapi.ShellScaling;
 {$ENDIF DELPHI11_OR_HIGHER}
 
-{$IFDEF MSWINDOWS}
 function OwnerDrawStateToPython(const AOwnerDrawState: TOwnerDrawState): PPyObject;
 
   procedure Append(const AList: PPyObject; const AString: string);
@@ -57,7 +53,6 @@ begin
   for LState := Ord(odSelected) to Ord(odComboBoxEdit) do
     Append(Result, System.TypInfo.GetEnumName(TypeInfo(TOwnerDrawState), LState));
 end;
-{$ENDIF MSWINDOWS}
 
 { Register the wrappers, the globals and the constants }
 type

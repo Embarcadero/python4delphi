@@ -39,7 +39,6 @@ type
     class function GetTypeInfo: PTypeInfo; override;
   end;
 
-  {$IFNDEF FPC}
   TPyDelphiDateTimePicker = class (TPyDelphiWinControl)
   private
     function  GetDelphiObject: TDateTimePicker;
@@ -49,7 +48,6 @@ type
     // Properties
     property DelphiObject: TDateTimePicker read GetDelphiObject write SetDelphiObject;
   end;
-  {$ENDIF FPC}
 
   TPyDelphiTabSheet = class (TPyDelphiWinControl)
   private
@@ -92,27 +90,19 @@ type
     procedure SetDelphiObject(const Value: TPageControl);
   protected
     // methods
-    {$IFNDEF FPC}
     function  IndexOfTabAt_Wrapper(args: PPyObject): PPyObject; cdecl;
     function  GetHitTestInfoAt_Wrapper(args: PPyObject): PPyObject; cdecl;
-    {$ENDIF FPC}
     function  TabRect_Wrapper(args: PPyObject): PPyObject; cdecl;
-    {$IFNDEF FPC}
     function  ScrollTabs_Wrapper(args: PPyObject): PPyObject; cdecl;
-    {$ENDIF FPC}
     function  FindNextPage_Wrapper(args: PPyObject): PPyObject; cdecl;
     function  SelectNextPage_Wrapper(args: PPyObject): PPyObject; cdecl;
     // Property Getters
     function Get_ActivePage( AContext: Pointer): PPyObject; cdecl;
     function Get_ActivePageIndex( AContext: Pointer): PPyObject; cdecl;
-    {$IFNDEF FPC}
     function Get_Canvas( AContext: Pointer): PPyObject; cdecl;
-    {$ENDIF FPC}
     function Get_PageCount( AContext: Pointer): PPyObject; cdecl;
     function Get_Pages( AContext: Pointer): PPyObject; cdecl;
-    {$IFNDEF FPC}
     function Get_RowCount( AContext: Pointer): PPyObject; cdecl;
-    {$ENDIF FPC}
     // Property Setters
     function Set_ActivePage( AValue: PPyObject; AContext: Pointer): integer; cdecl;
     function Set_ActivePageIndex( AValue: PPyObject; AContext: Pointer): integer; cdecl;
@@ -366,6 +356,7 @@ type
     class function GetTypeInfo: PTypeInfo; override;
   end;
 
+{$IFDEF DELPHI11_OR_HIGHER}
   //TTVCheckStateChangedEvent
   TTVCheckStateChangedEventHandler = class(TEventHandler)
   protected
@@ -388,6 +379,7 @@ type
 
     class function GetTypeInfo: PTypeInfo; override;
   end;
+{$ENDIF}
 
   TPyDelphiTreeNode = class(TPyDelphiPersistent)
   private
@@ -733,7 +725,9 @@ type
     property DelphiObject: TListView read GetDelphiObject write SetDelphiObject;
   end;
 
+{$IFDEF DELPHI11_OR_HIGHER}
   function NodeCheckStateToPython(const ANodeCheckState: TNodeCheckState): PPyObject;
+{$ENDIF}
 
   function CustomDrawTargetToPython(const ACustomDrawTarget: TCustomDrawTarget): PPyObject;
   function CustomDrawStageToPython(const ACustomDrawStage: TCustomDrawStage): PPyObject;
@@ -760,6 +754,7 @@ type
     procedure DefineVars(APyDelphiWrapper: TPyDelphiWrapper); override;
   end;
 
+{$IFDEF DELPHI11_OR_HIGHER}
 function NodeCheckStateToPython(const ANodeCheckState: TNodeCheckState): PPyObject;
 begin
   Result := GetPythonEngine().PyUnicodeFromString(
@@ -767,6 +762,7 @@ begin
       TypeInfo(TNodeCheckState),
       Ord(ANodeCheckState)));
 end;
+{$ENDIF}
 
 function CustomDrawTargetToPython(const ACustomDrawTarget: TCustomDrawTarget): PPyObject;
 begin
@@ -878,26 +874,6 @@ end;
 
 procedure TComCtrlsRegistration.RegisterWrappers(APyDelphiWrapper: TPyDelphiWrapper);
 begin
-  inherited;
-  {$IFNDEF FPC}
-  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiDateTimePicker);
-  {$ENDIF FPC}
-  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiPageControl);
-  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiTabSheet);
-  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiTrackBar);
-  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiToolButton);
-  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiToolbar);
-  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiCustomCustomTabControl);
-  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiCustomTabControl);
-  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiCustomStatusBar);
-  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiStatusBar);
-  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiTreeNode);
-  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiCustomTreeView);
-  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiTreeView);
-  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiListItem);
-  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiCustomListView);
-  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiListView);
-
   APyDelphiWrapper.EventHandlers.RegisterHandler(TTabChangingEventHandler);
   APyDelphiWrapper.EventHandlers.RegisterHandler(TTVChangingEventHandler);
   APyDelphiWrapper.EventHandlers.RegisterHandler(TTVChangedEventHandler);
@@ -913,9 +889,10 @@ begin
   APyDelphiWrapper.EventHandlers.RegisterHandler(TTVAdvancedCustomDrawEventHandler);
   APyDelphiWrapper.EventHandlers.RegisterHandler(TTVAdvancedCustomDrawItemEventHandler);
   APyDelphiWrapper.EventHandlers.RegisterHandler(TTVCreateNodeClassEventHandler);
+{$IFDEF DELPHI11_OR_HIGHER}
   APyDelphiWrapper.EventHandlers.RegisterHandler(TTVCheckStateChangedEventHandler);
   APyDelphiWrapper.EventHandlers.RegisterHandler(TTVCheckStateChangingEventHandler);
-
+{$ENDIF}
   APyDelphiWrapper.EventHandlers.RegisterHandler(TLVDeletedEventHandler);
   APyDelphiWrapper.EventHandlers.RegisterHandler(TLVEditingEventHandler);
   APyDelphiWrapper.EventHandlers.RegisterHandler(TLVEditedEventHandler);
@@ -941,9 +918,25 @@ begin
   APyDelphiWrapper.EventHandlers.RegisterHandler(TLVSubItemImageEventHandler);
   APyDelphiWrapper.EventHandlers.RegisterHandler(TLVInfoTipEventHandler);
   APyDelphiWrapper.EventHandlers.RegisterHandler(TLVCreateItemClassEventHandler);
+
+  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiDateTimePicker);
+  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiPageControl);
+  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiTabSheet);
+  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiTrackBar);
+  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiToolButton);
+  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiToolbar);
+  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiCustomCustomTabControl);
+  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiCustomTabControl);
+  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiCustomStatusBar);
+  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiStatusBar);
+  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiTreeNode);
+  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiCustomTreeView);
+  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiTreeView);
+  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiListItem);
+  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiCustomListView);
+  APyDelphiWrapper.RegisterDelphiWrapper(TPyDelphiListView);
 end;
 
-{$IFNDEF FPC}
 
 { TPyDelphiDateTimePicker }
 
@@ -961,7 +954,6 @@ procedure TPyDelphiDateTimePicker.SetDelphiObject(const Value: TDateTimePicker);
 begin
   inherited DelphiObject := Value;
 end;
-{$ENDIF FPC}
 
 { TPyDelphiPageControl }
 
@@ -996,7 +988,6 @@ begin
   Result := TPageControl(inherited DelphiObject);
 end;
 
-{$IFNDEF FPC}
 function TPyDelphiPageControl.GetHitTestInfoAt_Wrapper(
   args: PPyObject): PPyObject;
 
@@ -1050,7 +1041,6 @@ begin
       Result := nil;
   end;
 end;
-{$ENDIF FPC}
 
 function TPyDelphiPageControl.Get_ActivePage(AContext: Pointer): PPyObject;
 begin
@@ -1065,13 +1055,11 @@ begin
   Result := GetPythonEngine.PyLong_FromLong(DelphiObject.ActivePageIndex);
 end;
 
-{$IFNDEF FPC}
 function TPyDelphiPageControl.Get_Canvas(AContext: Pointer): PPyObject;
 begin
   Adjust(@Self);
   Result := Wrap(DelphiObject.Canvas);
 end;
-{$ENDIF FPC}
 
 function TPyDelphiPageControl.Get_PageCount(AContext: Pointer): PPyObject;
 begin
@@ -1087,7 +1075,6 @@ begin
     Setup(Self.PyDelphiWrapper, TPagesAccess.Create(Self.PyDelphiWrapper, Self.DelphiObject));
 end;
 
-{$IFNDEF FPC}
 function TPyDelphiPageControl.Get_RowCount(AContext: Pointer): PPyObject;
 begin
   Adjust(@Self);
@@ -1108,7 +1095,6 @@ begin
       Result := nil;
   end;
 end;
-{$ENDIF FPC}
 
 class procedure TPyDelphiPageControl.RegisterGetSets(
   PythonType: TPythonType);
@@ -1117,39 +1103,31 @@ begin
         'Specifies the page currently displayed by the page control.', nil);
   PythonType.AddGetSet('ActivePageIndex', @TPyDelphiPageControl.Get_ActivePageIndex, @TPyDelphiPageControl.Set_ActivePageIndex,
         'Specifies the page currently displayed by the page control.', nil);
-  {$IFNDEF FPC}
   PythonType.AddGetSet('Canvas', @TPyDelphiPageControl.Get_Canvas, nil,
         'Gives access to the tab control canvas.', nil);
-  {$ENDIF FPC}
   PythonType.AddGetSet('PageCount', @TPyDelphiPageControl.Get_PageCount, nil,
         'Indicates the number of pages in the TPageControl object.', nil);
   PythonType.AddGetSet('Pages', @TPyDelphiPageControl.Get_Pages, nil,
         'Lists all the pages in the TPageControl.', nil);
-  {$IFNDEF FPC}
   PythonType.AddGetSet('RowCount', @TPyDelphiPageControl.Get_RowCount, nil,
         '', nil);
-  {$ENDIF FPC}
 end;
 
 class procedure TPyDelphiPageControl.RegisterMethods(
   PythonType: TPythonType);
 begin
-  {$IFNDEF FPC}
   PythonType.AddMethod('IndexOfTabAt', @TPyDelphiPageControl.IndexOfTabAt_Wrapper,
     'TPageControl.IndexOfTabAt()'#10 +
     'Indicates the index of the tab at a specified point.');
   PythonType.AddMethod('GetHitTestInfoAt', @TPyDelphiPageControl.GetHitTestInfoAt_Wrapper,
     'TPageControl.GetHitTestInfoAt()'#10 +
     'Returns information about the location of a point relative to the client area of the tab control.');
-  {$ENDIF FPC}
   PythonType.AddMethod('TabRect', @TPyDelphiPageControl.TabRect_Wrapper,
     'TPageControl.TabRect()'#10 +
     'Returns the bounding rectangle for a specified tab.');
-  {$IFNDEF FPC}
   PythonType.AddMethod('ScrollTabs', @TPyDelphiPageControl.ScrollTabs_Wrapper,
     'TPageControl.ScrollTabs()'#10 +
     'Scrolls the tabs that are visible when the tab control is not multi-line.');
-  {$ENDIF FPC}
   PythonType.AddMethod('FindNextPage', @TPyDelphiPageControl.FindNextPage_Wrapper,
     'TPageControl.FindNextPage()'#10 +
     'Returns the next page in the page control before or after a specified page.');
@@ -1158,7 +1136,6 @@ begin
     'Changes the ActivePage to the first visible page that is before or after the currently active page.');
 end;
 
-{$IFNDEF FPC}
 function TPyDelphiPageControl.ScrollTabs_Wrapper(
   args: PPyObject): PPyObject;
 var
@@ -1174,7 +1151,6 @@ begin
       Result := nil;
   end;
 end;
-{$ENDIF FPC}
 
 function TPyDelphiPageControl.SelectNextPage_Wrapper(
   args: PPyObject): PPyObject;
@@ -2372,6 +2348,7 @@ procedure TTVCreateNodeClassEventHandler.DoEvent(Sender: TCustomTreeView;
 var
   LPyObject, LPyTuple, LPyResult, LPyNodeClass: PPyObject;
   LVarParam: TPyDelphiVarParameter;
+  ErrMsg: string;
   LClass: TClass;
 begin
   Assert(Assigned(PyDelphiWrapper));
@@ -2388,8 +2365,11 @@ begin
         if Assigned(LPyResult) then begin
           Py_DECREF(LPyResult);
 
-          LClass := TPyDelphiObjectClass(
-            PythonToPythonType(LVarParam.Value).PyObjectClass).DelphiObjectClass;
+          if not ValidateClassRef(LVarParam.Value, TTreeNode, LClass, ErrMsg) then
+          begin
+            InvalidArguments('OnCreateNode', ErrMsg);
+            Exit;
+          end;
 
           NodeClass := TTreeNodeClass(LClass);
         end;
@@ -2400,6 +2380,7 @@ begin
     end;
 end;
 
+{$IFDEF DELPHI11_OR_HIGHER}
 { TTVCheckStateChangedEventHandler }
 
 constructor TTVCheckStateChangedEventHandler.Create(
@@ -2495,6 +2476,7 @@ begin
       CheckError();
     end;
 end;
+{$ENDIF}
 
 { TLVDeletedEventHandler }
 
@@ -3647,6 +3629,7 @@ var
   LPyObject, LPyTuple, LPyResult, LPyItemClass: PPyObject;
   LVarParam: TPyDelphiVarParameter;
   LClass: TClass;
+  ErrMsg: string;
 begin
   Assert(Assigned(PyDelphiWrapper));
   if Assigned(Callable) and PythonOK() then
@@ -3662,8 +3645,11 @@ begin
         if Assigned(LPyResult) then begin
           Py_DECREF(LPyResult);
 
-          LClass := TPyDelphiObjectClass(
-            PythonToPythonType(LVarParam.Value).PyObjectClass).DelphiObjectClass;
+          if not ValidateClassRef(LVarParam.Value, TListItem, LClass, ErrMsg) then
+          begin
+            InvalidArguments('OnCreateItem', ErrMsg);
+            Exit;
+          end;
 
           ItemClass := TListItemClass(LClass);
         end;
@@ -3676,8 +3662,5 @@ end;
 
 initialization
   RegisteredUnits.Add( TComCtrlsRegistration.Create );
-  {$IFNDEF FPC}
   System.Classes.RegisterClasses([TDateTimePicker]);
-  {$ENDIF FPC}
-
 end.

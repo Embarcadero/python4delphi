@@ -41,6 +41,12 @@ type
   private
     FFruit: TFruit;
     FFruits: TFruits;
+    TempI: Integer;
+    TempS: string;
+    function GetIndexed2(S1, S2: string): string;
+    procedure SetIndexed2(S1, S2: string; const Value: string);
+    function GetIndexed(I: Integer): Integer;
+    procedure SetIndexed(I: Integer; const Value: Integer);
   public
     FruitField :TFruit;
     FruitsField: TFruits;
@@ -49,6 +55,7 @@ type
     ObjectField: TObject;
     RecordField: TTestRecord;
     InterfaceField: ITestInterface;
+    ClassRef: TClass;
     function GetData: TObject;
     procedure BuyFruits(AFruits: TFruits);
     procedure SellFruits(const AFruits: TFruitDynArray);
@@ -61,6 +68,17 @@ type
     function SetStringField(const Value: string): string; overload;
     procedure PassVariantArray(const Value: Variant);
     function ClassRefParam(ClassRef: TPersistentClass): string;
+    procedure VarArgsProc1(var I: Integer);
+    function  VarArgsFunc1(var I: Integer): Integer;
+    procedure VarArgsProc2(var I: Integer; var S: string);
+    property Indexed[I: Integer]: Integer read GetIndexed write SetIndexed;
+    property Indexed2[S1, S2: string]: string read GetIndexed2 write SetIndexed2; default;
+    class var ClassField: string;
+    class function DoubleString(S: string): string;
+    class function Square(I: Integer): Integer; static;
+  end;
+
+  TTestSubclass = class(TTestRttiAccess)
   end;
 
   TTestInterfaceImpl = class(TInterfacedObject, ITestInterface)
@@ -120,7 +138,7 @@ type
     [Test]
     procedure TestGetStaticArray;
     [Test]
-    procedure TestMethodWithVarAndOverload;
+    procedure TestMethodWithdOverloads;
     [Test]
     procedure TestFreeReturnedObject;
     [Test]
@@ -128,7 +146,17 @@ type
     [Test]
     procedure TestClassRefParam;
     [Test]
+    procedure TestClassRefField;
+    [Test]
     procedure TestInheritance;
+    [Test]
+    procedure TestClassMethods;
+    [Test]
+    procedure TestStaticMethods;
+    [Test]
+    procedure TestIndexedProperties;
+    [Test]
+    procedure TestVarArgs;
   end;
 
 implementation
@@ -190,6 +218,11 @@ begin
   PyDelphiWrapper.Module := DelphiModule;
 
   PythonEngine.LoadDll;
+
+  //  Register TTestRTTIAccess and TTestSubclass and initialize
+  PyDelphiWrapper.RegisterDelphiWrapper(TPyClassWrapper<TTestRTTIAccess>).Initialize;
+  PyDelphiWrapper.RegisterDelphiWrapper(TPyClassWrapper<TTestSubclass>).Initialize;
+
   //  Then wrap the an instance our TTestRTTIAccess
   //  It will allow us to to test access to public fields and methods as well
   //  public (as well as published) properties.
@@ -197,17 +230,13 @@ begin
   //  is destroyed, so we need to set its Owned property to True;
   TestRttiAccess := TTestRTTIAccess.Create;
   TestRttiAccess.InterfaceField := TTestInterfaceImpl.Create;
-  Py := PyDelphiWrapper.Wrap(TestRttiAccess, TObjectOwnership.soReference);
-  DelphiModule.SetVar('rtti_var', Py);
-  PythonEngine.Py_DecRef(Py);
+  PyDelphiWrapper.DefineVar('rtti_var', TestRttiAccess, TObjectOwnership.soReference);
   Py := PyDelphiWrapper.WrapRecord(@Rec, TRttiContext.Create.GetType(TypeInfo(TTestRecord)) as TRttiStructuredType);
   DelphiModule.SetVar('rtti_rec', Py);
   PythonEngine.Py_DecRef(Py);
   FTestInterface := TTestInterfaceImpl.Create;
-  Py := PyDelphiWrapper.WrapInterface(TValue.From(FTestInterface));
-  DelphiModule.SetVar('rtti_interface', Py);
-  PythonEngine.Py_DecRef(Py);
-  PythonEngine.ExecString('from delphi import rtti_var, rtti_rec, rtti_interface, Object, Persistent, Collection, Strings');
+  PyDelphiWrapper.DefineVar('rtti_interface', TValue.From(FTestInterface));
+  PythonEngine.ExecString('from delphi import rtti_var, rtti_rec, rtti_interface, Object, Persistent, Collection, Strings, TestRttiAccess, TestSubclass');
   Rtti_Var := MainModule.rtti_var;
   Rtti_Rec := MainModule.rtti_rec;
   Rtti_Interface := MainModule.rtti_interface;
@@ -222,6 +251,22 @@ begin
   PyDelphiWrapper.Free;
   DelphiModule.Free;
   TestRttiAccess.Free;
+end;
+
+procedure TTestWrapDelphi.TestClassMethods;
+begin
+   // calling from a class
+   Assert.AreEqual<string>(MainModule.TestRttiAccess.DoubleString('A'), 'AA');
+   // calling from an instance
+   Assert.AreEqual<string>(Rtti_Var.DoubleString('A'), 'AA');
+   // calling from a subclass
+   Assert.AreEqual<string>(MainModule.TestSubclass.DoubleString('B'), 'BB');
+end;
+
+procedure TTestWrapDelphi.TestClassRefField;
+begin
+  Rtti_Var.ClassRef := MainModule.TestRttiAccess;
+  Assert.AreEqual(TestRttiAccess.ClassRef, TTestRttiAccess);
 end;
 
 procedure TTestWrapDelphi.TestClassRefParam;
@@ -277,6 +322,17 @@ begin
   Assert.IsTrue(VarIsPythonList(List));
   Assert.AreEqual(1000, Integer(len(List)));
   Assert.AreEqual(Int64(999), Int64(PythonEngine.PyObjectAsVariant(PythonEngine.PyList_GetItem(ExtractPythonObjectFrom(List), 999))));
+end;
+
+procedure TTestWrapDelphi.TestIndexedProperties;
+begin
+  PythonEngine.ExecString('rtti_var.Indexed[2] = 4');
+  Assert.AreEqual<Integer>(VarPythonEval('rtti_var.Indexed[2]'), 6);
+  PythonEngine.ExecString('rtti_var.Indexed2["A", "B"] = "C"');
+  Assert.AreEqual<string>(VarPythonEval('rtti_var.Indexed2["A", "B"]'), 'A,B: C');
+  // default property
+  PythonEngine.ExecString('rtti_var["A", "B"] = "C"');
+  Assert.AreEqual<string>(VarPythonEval('rtti_var["A", "B"]'), 'A,B: C');
 end;
 
 procedure TTestWrapDelphi.TestInheritance;
@@ -420,12 +476,33 @@ begin
   Assert.AreEqual<double>(TestRttiAccess.DoubleField, 1.234);
 end;
 
+procedure TTestWrapDelphi.TestStaticMethods;
+begin
+   // calling from a class
+   Assert.AreEqual<Integer>(MainModule.TestRttiAccess.Square(2), 4);
+   // calling from an instance
+   Assert.AreEqual<Integer>(Rtti_Var.Square(4), 16);
+   // calling from a subclass
+   Assert.AreEqual<Integer>(MainModule.TestSubclass.Square(5), 25);
+end;
+
 procedure TTestWrapDelphi.TestStringField;
 begin
   TestRttiAccess.StringField := 'Hi';
   Assert.AreEqual(string(Rtti_Var.StringField), 'Hi');
   Rtti_Var.StringField := 'P4D';
   Assert.AreEqual(TestRttiAccess.StringField, 'P4D');
+end;
+
+procedure TTestWrapDelphi.TestVarArgs;
+begin
+  Assert.AreEqual<Integer>(VarPythonEval('rtti_var.VarArgsProc1(2)'), 4);
+  PythonEngine.ExecString('a, b = rtti_var.VarArgsFunc1(2)');
+  Assert.AreEqual<Integer>(VarPythonEval('a'), 16);
+  Assert.AreEqual<Integer>(VarPythonEval('b'), 4);
+  PythonEngine.ExecString('a, b = rtti_var.VarArgsProc2(2, "A")');
+  Assert.AreEqual<Integer>(VarPythonEval('a'), 4);
+  Assert.AreEqual<string>(VarPythonEval('b'), 'AA');
 end;
 
 procedure TTestWrapDelphi.TestDynArrayParameters;
@@ -451,16 +528,50 @@ begin
   Assert.IsTrue(TestRttiAccess.Fruits = [Orange]);
 end;
 
-procedure TTestWrapDelphi.TestMethodWithVarAndOverload;
+procedure TTestWrapDelphi.TestMethodWithdOverloads;
 begin
   Rtti_Var.SetStringField('test');
   Assert.AreEqual('test', TestRttiAccess.StringField);
+  Rtti_Var.SetStringField(123);
+  Assert.AreEqual('123', TestRttiAccess.StringField);
+end;
+
+procedure TTestRttiAccess.SetIndexed(I: Integer; const Value: Integer);
+begin
+  TempI := I + Value;
+end;
+
+procedure TTestRttiAccess.SetIndexed2(S1, S2: string; const Value: string);
+begin
+  TempS := Format('%s,%s: %s', [S1, S2, Value]);
 end;
 
 function TTestRttiAccess.SetStringField(const Value: string): string;
 begin
   StringField := Value;
   Result := StringField;
+end;
+
+class function TTestRttiAccess.Square(I: Integer): Integer;
+begin
+  Result := I * I;
+end;
+
+function TTestRttiAccess.VarArgsFunc1(var I: Integer): Integer;
+begin
+  I := 2 * I;
+  Result := I * I;
+end;
+
+procedure TTestRttiAccess.VarArgsProc1(var I: Integer);
+begin
+  I := 2 * I;
+end;
+
+procedure TTestRttiAccess.VarArgsProc2(var I: Integer; var S: string);
+begin
+  I := 2 * I;
+  S := S + S;
 end;
 
 function TTestRttiAccess.SetStringField(var Value: Integer): string;
@@ -472,6 +583,11 @@ end;
 function TTestRttiAccess.ClassRefParam(ClassRef: TPersistentClass): string;
 begin
   Result := ClassRef.ClassName;
+end;
+
+class function TTestRttiAccess.DoubleString(S: string): string;
+begin
+  Result := S + S;
 end;
 
 function TTestRttiAccess.GetData: TObject;
@@ -486,6 +602,16 @@ begin
   SetLength(Result, 1000000);
   for I := 0 to Length(Result) - 1 do
     Result[I] := I;
+end;
+
+function TTestRttiAccess.GetIndexed(I: Integer): Integer;
+begin
+  Result := TempI;
+end;
+
+function TTestRttiAccess.GetIndexed2(S1, S2: string): string;
+begin
+  Result := TempS;
 end;
 
 function TTestRttiAccess.GetStaticArray: TStaticArray;

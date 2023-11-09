@@ -130,7 +130,7 @@ uses
 type
   TNamedParamDesc = record
     Index : Integer;
-    Name : AnsiString;
+    Name : PAnsiChar;
   end;
   TNamedParamArray = array of TNamedParamDesc;
 
@@ -263,7 +263,6 @@ resourcestring
   SCantConvertValueToPythonObject = 'Can''t convert Value into a Python object';
   SCantCreateNewSequenceObject = 'Can''t create a new sequence object';
   SExpectedPythonVariant = 'Expected a Python variant';
-  SExpectedPythonList = 'Expected a Python List: ';
 
 { Python variant creation utils }
 
@@ -941,7 +940,7 @@ const
   CPropertyGet = $02;
   CPropertySet = $04;
 
-{$IF defined(PATCHEDSYSTEMDISPINVOKE) and (defined(OSX64) or defined(LINUX) or defined(CPUARM))}
+{$IF defined(PATCHEDSYSTEMDISPINVOKE) and (defined(OSX64) or defined(LINUX))}
 {
    Fixes https://quality.embarcadero.com/browse/RSP-28097
 }
@@ -956,10 +955,7 @@ begin
   raise EVariantDispatchError.Create(SDispatchError);
 end;
 
-{$IFDEF CPUARM}
-
 function GetDispatchInvokeArgs(CallDesc: PCallDesc; Params: Pointer; var Strings: TStringRefList; OrderLTR : Boolean): TVarDataArray;
-{$IF defined(OSX64) or defined(LINUX) or defined(CPUARM64)}
 const
   { Parameter type masks - keep in sync with decl.h/ap* enumerations}
   atString   = $48;
@@ -993,11 +989,7 @@ begin
       if (ArgType and atTypeMask) = atString then
       begin
         PVarData(PVarParm)^.VType := varByRef or varOleStr;
-{$IFDEF NEXTGEN}
-        PVarData(PVarParm)^.VPointer := Strings[StringCount].FromUTF8( PUTF8String(Temp)  );
-{$ELSE !NEXTGEN}
         PVarData(PVarParm)^.VPointer := Strings[StringCount].FromAnsi( PAnsiString(Temp));
-{$ENDIF NEXTGEN}
         Inc(StringCount);
       end
       else
@@ -1044,369 +1036,14 @@ begin
         varVariant:
           begin
             PVarParm^.VType := varEmpty;
-            {$IFDEF CPU64BITS}
-            //PVariant(PVarParm)^ := PVariant(Params^)^;
+{$IFDEF CPUX64}
+
+//          PVariant(PVarParm)^ := PVariant(Params^)^;
             PVariant(PVarParm)^ := VarArgGetValue(VAList, PVariant)^;
-            {$ELSE}
-            //PVariant(PVarParm)^ := PVariant(Params)^;
-            PVariant(PVarParm)^ := VarArgGetValue(VAList, Variant);
-            {$ENDIF}
-          end;
-        varUnknown:   PVarParm^.VUnknown := VarArgGetValue(VAList, Pointer);
-        varSmallint:  PVarParm^.VSmallInt := VarArgGetValue(VAList, SmallInt);
-        varShortInt:  PVarParm^.VShortInt := VarArgGetValue(VAList, ShortInt);
-        varByte:      PVarParm^.VByte :=  VarArgGetValue(VAList, Byte);
-        varWord:
-          begin
-            if DispatchUnsignedAsSigned then
-            begin
-              PVarParm^.VType := varInteger;
-              PVarParm^.VInteger := Integer(VarArgGetValue(VAList, Word));
-            end else
-              PVarParm^.VWord := VarArgGetValue(VAList, Word);
-          end;
-        varUInt32:
-          begin
-            if DispatchUnsignedAsSigned then
-            begin
-              PVarParm^.VType := varInteger;
-              PVarParm^.VInteger := Integer(VarArgGetValue(VAList, Cardinal));
-            end else
-              PVarParm^.VUInt32 := VarArgGetValue(VAList, Cardinal);
-          end;
-        varInt64:     PVarParm^.VInt64 := VarArgGetValue(VAList, Int64);
-        varUInt64:
-          begin
-            if DispatchUnsignedAsSigned then
-            begin
-              PVarParm^.VType := varInt64;
-              PVarParm^.VInt64 := VarArgGetValue(VAList, Int64); //Int64(PInt64(Params)^);
-            end else
-              PVarParm^.VUInt64 := VarArgGetValue(VAList, UInt64); //PUInt64(Params)^;
-          end;
-        atString:
-        begin
-{$IFDEF NEXTGEN}
-          PVarParm^.VType := varOleStr;
-          Temp := VarArgGetValue(VAList, Pointer);
-          if PUTF8String(Temp)^ <> '' then
-          begin
-            PVarParm^.VPointer := PWideChar(Strings[StringCount].FromUTF8(PUTF8String(Temp))^);
-            Strings[StringCount].UTF8 := nil;
-            Inc(StringCount);
-          end
-          else
-            PVarParm^.VPointer := _EmptyBSTR;
-{$ELSE !NEXTGEN}
-          PVarParm^.VType := varOleStr;
-          Temp := VarArgGetValue(VAList, Pointer);
-          if AnsiString(Temp) <> '' then
-          begin
-            {
-            This line causes a crash and is replaced with the one below in line with unicode strings
-            PVarParm^.VPointer := PWideChar(Strings[StringCount].FromAnsi(PAnsiString(Temp))^);
-            }
-            PVarParm^.VPointer := PWideChar(Strings[StringCount].FromAnsi(@AnsiString(Temp))^);
-            Strings[StringCount].Ansi := nil;
-            Inc(StringCount);
-          end
-          else
-            PVarParm^.VPointer := _EmptyBSTR;
-{$ENDIF  NEXTGEN}
-        end;
-        atUString:
-          begin
-            PVarParm^.VType := varOleStr;
-            Temp := VarArgGetValue(VAList, Pointer);
-            if UnicodeString(Temp) <> '' then
-            begin
-              PVarParm^.VPointer := PWideChar(Strings[StringCount].FromUnicode(@UnicodeString(Temp))^);
-              Strings[StringCount].Unicode := nil;
-              Inc(StringCount);
-            end
-            else
-              PVarParm^.VPointer := _EmptyBSTR;
-          end;
-      else
-        // Unsupported Var Types
-        //varDecimal  = $000E; { vt_decimal     14 } {UNSUPPORTED as of v6.x code base}
-        //varUndef0F  = $000F; { undefined      15 } {UNSUPPORTED per Microsoft}
-        //varRecord   = $0024; { VT_RECORD      36 }
-        //varString   = $0100; { Pascal string  256 } {not OLE compatible }
-        //varAny      = $0101; { Corba any      257 } {not OLE compatible }
-        //varUString  = $0102; { Unicode string 258 } {not OLE compatible }
-        _DispInvokeError;
-      end;
-    end;
-  end;
-end;
-{$ELSE !(defined(OSX64) or defined(LINUX) or defined(CPUARM64))}
-const
-  { Parameter type masks - keep in sync with decl.h/ap* enumerations}
-  atString   = $48;
-  atUString  = $4A;
-  atVarMask  = $3F;
-  atTypeMask = $7F;
-  atByRef    = $80;
-var
-  I: Integer;
-  ArgType: Byte;
-  PVarParam: PVarData;
-  StringCount: Integer;
-begin
-  StringCount := 0;
-  SetLength(Result, CallDesc^.ArgCount);
-  for I := 0 to CallDesc^.ArgCount-1 do
-  begin
-    ArgType := CallDesc^.ArgTypes[I];
-
-    if OrderLTR then
-      PVarParam := @Result[I]
-    else
-      PVarParam := @Result[CallDesc^.ArgCount-I-1];
-
-    if (ArgType and atByRef) = atByRef then
-    begin
-      if (ArgType and atTypeMask) = atString then
-      begin
-        PVarData(PVarParam)^.VType := varByRef or varOleStr;
-        PVarData(PVarParam)^.VPointer := Strings[StringCount].FromAnsi(PAnsiString(Params^));
-        Inc(StringCount);
-      end
-      else
-      if (ArgType and atTypeMask) = atUString then
-      begin
-        PVarData(PVarParam)^.VType := varByRef or varOleStr;
-        PVarData(PVarParam)^.VPointer := Strings[StringCount].FromUnicode(PUnicodeString(Params^));
-        Inc(StringCount);
-      end
-      else
-      begin
-        if ((ArgType and atTypeMask) = varVariant) and
-          ((PVarData(Params^)^.VType = varString) or (PVarData(Params^)^.VType = varUString)) then
-          VarCast(PVariant(Params^)^, PVariant(Params^)^, varOleStr);
-        //PVarData(PVarParm)^.VType := varByRef or (ArgType and atTypeMask);
-
-        ArgType := ArgType and atTypeMask;
-        if DispatchUnsignedAsSigned then
-          case ArgType of
-            varUInt64:   ArgType := varInt64;
-            varUInt32:   ArgType := varInteger;
-            varWord:     ArgType := varSmallint;
-            varByte:     ArgType := varShortInt;
-          end;
-
-        PVarData(PVarParam)^.VType := varByRef or ArgType;
-
-        PVarData(PVarParam)^.VPointer := PPointer(Params)^;
-
-        var LArgType := PVarData(Params^)^.VType;
-        if LArgType = PythonVariantType.VarType then
-        begin
-          PVarData(PVarParam)^.VType := PythonVariantType.VarType;
-        end;
-      end;
-      Inc(PByte(Params), SizeOf(Pointer));
-    end
-    else // ByVal
-    begin
-      PVarParam^.VType := ArgType;
-      case ArgType of
-        varEmpty, varNull: ; // Only need to set VType
-        varSmallint:  PVarParam^.VSmallInt := PSmallInt(Params)^;
-        varInteger:   PVarParam^.VInteger := PInteger(Params)^;
-        varSingle:    PVarParam^.VSingle := PSingle(Params)^;
-        varDouble:    PVarParam^.VDouble := PDouble(Params)^;
-        varCurrency:  PVarParam^.VCurrency := PCurrency(Params)^;
-        varDate:      PVarParam^.VDate := PDateTime(Params)^;
-        varOleStr:    PVarParam^.VPointer := PPointer(Params)^;
-        varDispatch:  PVarParam^.VDispatch := PPointer(Params)^;
-        varError:     PVarParam^.VError := HRESULT($80020004); //DISP_E_PARAMNOTFOUND;
-        varBoolean:   PVarParam^.VBoolean := PBoolean(Params)^;
-        varVariant:
-        begin
-          PVarParam^.VType := varEmpty;
-          {$IFDEF CPU64BITS}
-          PVariant(PVarParam)^ := PVariant(Params^)^;
-          {$ELSE}
-          PVariant(PVarParam)^ := PVariant(Params^)^; //it arrives here as a pointer for 32bits also
-          {$ENDIF}
-        end;
-        varUnknown:   PVarParam^.VUnknown := PPointer(Params)^;
-        varShortInt:  PVarParam^.VShortInt := PShortInt(Params)^;
-        varByte:      PVarParam^.VByte :=  PByte(Params)^;
-        varWord:
-        begin
-          if DispatchUnsignedAsSigned then
-          begin
-            PVarParam^.VType := varInteger;
-            PVarParam^.VInteger := Integer(PWord(Params)^);
-          end else
-            PVarParam^.VWord := PWord(Params)^;
-        end;
-        varUInt32:
-        begin
-          if DispatchUnsignedAsSigned then
-          begin
-            PVarParam^.VType := varInteger;
-            PVarParam^.VInteger := Integer(PCardinal(Params)^);
-          end else
-            PVarParam^.VUInt32 := PCardinal(Params)^;
-        end;
-        varInt64:     PVarParam^.VInt64 := PInt64(Params)^;
-        varUInt64:
-        begin
-          if DispatchUnsignedAsSigned then
-          begin
-            PVarParam^.VType := varInt64;
-            PVarParam^.VInt64 := Int64(PInt64(Params)^);
-          end else
-            PVarParam^.VUInt64 := PUInt64(Params)^;
-        end;
-        atString:
-        begin
-          PVarParam^.VType := varOleStr;
-          if PAnsiString(Params)^ <> '' then
-          begin
-            PVarParam^.VPointer := PWideChar(Strings[StringCount].FromAnsi(PAnsiString(Params))^);
-            Strings[StringCount].Ansi := nil;
-            Inc(StringCount);
-          end
-          else
-            PVarParam^.VPointer := _EmptyBSTR;
-        end;
-        atUString:
-        begin
-          PVarParam^.VType := varOleStr;
-          if PUnicodeString(Params)^ <> '' then
-          begin
-            PVarParam^.VPointer := PWideChar(Strings[StringCount].FromUnicode(PUnicodeString(Params))^);
-            Strings[StringCount].Unicode := nil;
-            Inc(StringCount);
-          end
-          else
-            PVarParam^.VPointer := _EmptyBSTR;
-        end;
-      else
-        // Unsupported Var Types
-        //varDecimal  = $000E; { vt_decimal     14 } {UNSUPPORTED as of v6.x code base}
-        //varUndef0F  = $000F; { undefined      15 } {UNSUPPORTED per Microsoft}
-        //varRecord   = $0024; { VT_RECORD      36 }
-        //varString   = $0100; { Pascal string  256 } {not OLE compatible }
-        //varAny      = $0101; { Corba any      257 } {not OLE compatible }
-        //varUString  = $0102; { Unicode string 258 } {not OLE compatible }
-        _DispInvokeError;
-      end;
-      case ArgType of
-        varError: ; // don't increase param pointer
-        {$IFDEF CPUARM}
-        varDouble, varCurrency, varDate, varInt64, varUInt64:
-          Inc(PByte(Params), 8);
-        varVariant:
-        {$IFDEF CPU64BITS}
-        Inc(PByte(Params), SizeOf(Variant));
-        {$ELSE}
-        Inc(PByte(Params), SizeOf(Pointer));
-        {$ENDIF}
-        {$ENDIF CPUARM}
-      else
-        Inc(PByte(Params), SizeOf(Pointer));
-      end;
-    end;
-  end;
-end;
-{$IFEND defined(OSX64) or defined(LINUX) or defined(CPUARM64)}
-
 {$ELSE}
-
-function GetDispatchInvokeArgs(CallDesc: PCallDesc; Params: Pointer; var Strings: TStringRefList; OrderLTR : Boolean): TVarDataArray;
-const
-  { Parameter type masks - keep in sync with decl.h/ap* enumerations}
-  atString   = $48;
-  atUString  = $4A;
-  atVarMask  = $3F;
-  atTypeMask = $7F;
-  atByRef    = $80;
-var
-  I: Integer;
-  ArgType: Byte;
-  PVarParm: PVarData;
-  StringCount: Integer;
-  VAList: TVarArgList;
-  Temp: Pointer;
-begin
-  VAList := TVarArgList(Params^);
-  StringCount := 0;
-  SetLength(Result, CallDesc^.ArgCount);
-  for I := 0 to CallDesc^.ArgCount-1 do
-  begin
-    ArgType := CallDesc^.ArgTypes[I];
-
-    if OrderLTR then
-      PVarParm := @Result[I]
-    else
-      PVarParm := @Result[CallDesc^.ArgCount-I-1];
-
-    if (ArgType and atByRef) = atByRef then
-    begin
-      Temp := VarArgGetValue(VAList, Pointer);
-      if (ArgType and atTypeMask) = atString then
-      begin
-        PVarData(PVarParm)^.VType := varByRef or varOleStr;
-        PVarData(PVarParm)^.VPointer := Strings[StringCount].FromAnsi( PAnsiString(Temp));
-        Inc(StringCount);
-      end
-      else
-      if (ArgType and atTypeMask) = atUString then
-      begin
-        PVarData(PVarParm)^.VType := varByRef or varOleStr;
-        PVarData(PVarParm)^.VPointer := Strings[StringCount].FromUnicode(PUnicodeString(Temp));
-        Inc(StringCount);
-      end
-      else
-      begin
-        if ((ArgType and atTypeMask) = varVariant) and
-          ((PVarData(Temp)^.VType = varString) or (PVarData(Temp)^.VType = varUString)) then
-          VarCast(PVariant(Temp)^, PVariant(Temp)^, varOleStr);
-        //PVarData(PVarParm)^.VType := varByRef or (ArgType and atTypeMask);
-
-        ArgType := ArgType and atTypeMask;
-        if DispatchUnsignedAsSigned then
-          case ArgType of
-            varUInt64:   ArgType := varInt64;
-            varUInt32:   ArgType := varInteger;
-            varWord:     ArgType := varSmallint;
-            varByte:     ArgType := varShortInt;
-          end;
-        PVarData(PVarParm)^.VType := varByRef or ArgType;
-
-        PVarData(PVarParm)^.VPointer := Temp;
-      end;
-    end
-    else // ByVal
-    begin
-      PVarParm^.VType := ArgType;
-      case ArgType of
-        varEmpty, varNull: ; // Only need to set VType
-        varInteger:   PVarParm^.VInteger := VarArgGetValue(VAList, Integer);
-        varSingle:    PVarParm^.VSingle := VarArgGetValue(VAList, Single);
-        varDouble:    PVarParm^.VDouble :=  VarArgGetValue(VAList, Double);
-        varCurrency:  PVarParm^.VCurrency := VarArgGetValue(VAList, Currency);
-        varDate:      PVarParm^.VDate := VarArgGetValue(VAList, TDateTime);
-        varOleStr:    PVarParm^.VPointer := VarArgGetValue(VAList, Pointer);
-        varDispatch:  PVarParm^.VDispatch := VarArgGetValue(VAList, Pointer);
-        varError:     PVarParm^.VError := HRESULT($80020004); //DISP_E_PARAMNOTFOUND;
-        varBoolean:   PVarParm^.VBoolean := VarArgGetValue(VAList, Boolean);
-        varVariant:
-          begin
-            PVarParm^.VType := varEmpty;
-            {$IFDEF CPU64BITS}
-            //PVariant(PVarParm)^ := PVariant(Params^)^;
-            PVariant(PVarParm)^ := VarArgGetValue(VAList, PVariant)^;
-            {$ELSE}
-            //PVariant(PVarParm)^ := PVariant(Params)^;
+//          PVariant(PVarParm)^ := PVariant(Params)^;
             PVariant(PVarParm)^ := VarArgGetValue(VAList, Variant);
-            {$ENDIF}
+{$ENDIF}
           end;
         varUnknown:   PVarParm^.VUnknown := VarArgGetValue(VAList, Pointer);
         varSmallint:  PVarParm^.VSmallInt := VarArgGetValue(VAList, SmallInt);
@@ -1483,8 +1120,6 @@ begin
     end;
   end;
 end;
-{$ENDIF CPUARM}
-
 {$IFEND}
 
 {$IFDEF DELPHIXE7_OR_HIGHER}
@@ -1636,40 +1271,41 @@ procedure TPythonVariantType.DispInvoke(Dest: PVarData;
     LNamedArgStart : Integer;     //arg position of 1st named argument (if any)
     I : integer;
   begin
+    SetLength(fNamedParams, CallDesc^.NamedArgCount);
+    if CallDesc^.NamedArgCount = 0 then
+      Exit;
     LNamePtr := PAnsiChar(@CallDesc^.ArgTypes[CallDesc^.ArgCount]);
     LNamedArgStart := CallDesc^.ArgCount - CallDesc^.NamedArgCount;
-    SetLength(fNamedParams, CallDesc^.NamedArgCount);
     // Skip function Name
     for I := 0 to CallDesc^.NamedArgCount - 1 do begin
       LNamePtr := LNamePtr + Succ(Length(LNamePtr));
       fNamedParams[I].Index := I+LNamedArgStart;
-      fNamedParams[I].Name  := AnsiString(LNamePtr);
+      fNamedParams[I].Name  := LNamePtr;
     end;
   end;
 
 Var
   NewCallDesc : TCallDesc;
 begin
-
-  if CallDesc^.NamedArgCount > 0 then GetNamedParams;
-  try
-    if (CallDesc^.CallType = CPropertyGet) and (CallDesc^.ArgCount = 1) then begin
+    if CallDesc^.CallType = CDoMethod then
+      GetNamedParams;  // fNamedParams will be cleared in EvalPython
+    if (CallDesc^.CallType = CPropertyGet) and (CallDesc^.ArgCount = 1) then
+    begin
       NewCallDesc := CallDesc^;
       NewCallDesc.CallType := CDoMethod;
-    {$IFDEF PATCHEDSYSTEMDISPINVOKE}
+      SetLength(fNamedParams, 0);
+      {$IFDEF PATCHEDSYSTEMDISPINVOKE}
       PatchedDispInvoke(Dest, Source, @NewCallDesc, Params);
-    {$ELSE PATCHEDSYSTEMDISPINVOKE}
+      {$ELSE PATCHEDSYSTEMDISPINVOKE}
       inherited DispInvoke(Dest, Source, @NewCallDesc, Params);
-    {$ENDIF PATCHEDSYSTEMDISPINVOKE}
-    end else
+      {$ENDIF PATCHEDSYSTEMDISPINVOKE}
+    end
+    else
       {$IFDEF PATCHEDSYSTEMDISPINVOKE}
       PatchedDispInvoke(Dest, Source, CallDesc, Params);
       {$ELSE PATCHEDSYSTEMDISPINVOKE}
       inherited;
       {$ENDIF PATCHEDSYSTEMDISPINVOKE}
-  finally
-    if CallDesc^.NamedArgCount > 0 then SetLength(fNamedParams, 0);
-  end;
 end;
 
 function TPythonVariantType.DoFunction(var Dest: TVarData;
@@ -1885,8 +1521,14 @@ var
   _Args : PPyObject;
   _ArgLen : Integer;
   _KW : PPyObject;
+  LNamedParams : TNamedParamArray;
 begin
   Result := nil;
+
+  // Store global fNamedParams and clear it  ASAP
+  LNamedParams := System.Copy(fNamedParams);
+  SetLength(fNamedParams, 0);
+
   with GetPythonEngine do
   begin
     // extract the associated Python object
@@ -1949,10 +1591,10 @@ begin
             _ArgLen := 0
           else
             _ArgLen := Length(Arguments);
-          if Length(fNamedParams) > 0 then
+          if Length(LNamedParams) > 0 then
           begin
             _KW := PyDict_New;
-            _ArgLen := fNamedParams[0].Index;
+            _ArgLen := LNamedParams[0].Index;
           end
           else
             _KW := nil;
@@ -1961,14 +1603,11 @@ begin
             try
               for i := 0 to _ArgLen-1 do
                 PyTuple_SetItem( _Args, i, ArgAsPythonObject(i) );
-              for i := 0 to Length(fNamedParams)-1 do
-                PyDict_SetItemString(_KW, PAnsiChar(fNamedParams[i].Name), ArgAsPythonObject(fNamedParams[i].Index));
+              for i := 0 to Length(LNamedParams)-1 do
+                PyDict_SetItemString(_KW, LNamedParams[i].Name, ArgAsPythonObject(LNamedParams[i].Index));
 
               // call the func or method, with or without named parameters (KW)
-              if Assigned(_KW) then
-                Result := PyEval_CallObjectWithKeywords(_obj, _Args, _KW)
-              else
-                Result := PyEval_CallObjectWithKeywords(_obj, _Args, nil);
+              Result := PyEval_CallObjectWithKeywords(_obj, _Args, _KW);
               CheckError(True);
             finally
               Py_XDecRef(_Args);
@@ -2483,8 +2122,8 @@ end;
 
 function TVarPyEnumerator.MoveNext: Boolean;
 begin
+  Result := True;
   try
-    Result := True;
     FCurrent := BuiltinModule.next(FIterator);
   except
     on E: EPyStopIteration do

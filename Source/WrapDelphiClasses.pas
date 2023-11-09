@@ -212,6 +212,9 @@ type
     function Set_Text( AValue : PPyObject; AContext : Pointer) : integer; cdecl;
     // Virtual Methods
     function Assign(ASource : PPyObject) : PPyObject; override;
+    {$IFDEF EXTENDED_RTTI}
+    class function ExcludedExposedMembers(APythonType: TPythonType): TArray<string>; override;
+    {$ENDIF EXTENDED_RTTI}
   public
     function  Repr : PPyObject; override;
     // Mapping services
@@ -330,6 +333,7 @@ type
     function GetDelphiObject: TMemoryStream;
     procedure SetDelphiObject(const Value: TMemoryStream);
   public
+    constructor CreateWith(APythonType: TPythonType; args, kwds: PPyObject); override;
     // Class methods
     class function  DelphiObjectClass : TClass; override;
     // Properties
@@ -1257,7 +1261,7 @@ var
   _obj : PPyObject;
   _owner : TObject;
 begin
-  inherited;
+  Create(APythonType);
   if APythonType.Engine.PyArg_ParseTuple( args, 'O:Create',@_obj ) <> 0 then
   begin
     _owner := nil;
@@ -1519,6 +1523,15 @@ begin
     Result := nil;
 end;
 
+{$IFDEF EXTENDED_RTTI}
+class function TPyDelphiStrings.ExcludedExposedMembers(APythonType: TPythonType): TArray<string>;
+begin
+  Result := inherited ExcludedExposedMembers(APythonType);
+  // so that TPyDelphiStrings.Assign is called from the inherited Assign
+  Result := Result + ['Assign'];
+end;
+{$ENDIF EXTENDED_RTTI}
+
 class function TPyDelphiStrings.GetContainerAccessClass: TContainerAccessClass;
 begin
   Result := TStringsAccess;
@@ -1688,7 +1701,7 @@ end;
 class procedure TPyDelphiStrings.SetupType(PythonType: TPythonType);
 begin
   inherited;
-  PythonType.Services.Mapping  := PythonType.Services.Mapping  + [msLength, msSubscript];
+  PythonType.Services.Mapping  := {PythonType.Services.Mapping  +} [msLength, msSubscript];
 end;
 
 { TPyDelphiBasicAction }
@@ -1938,7 +1951,6 @@ end;
 
 class procedure TPyDelphiStream.RegisterMethods(PythonType: TPythonType);
 begin
-  inherited;
   PythonType.AddMethod('ReadBytes', @TPyDelphiStream.ReadBytes_Wrapper,
     'TPyDelphiStream.ReadBytes()' + #10 + 'Read content as bytes.');
   PythonType.AddMethod('ReadInt', @TPyDelphiStream.ReadInt_Wrapper,
@@ -2132,7 +2144,7 @@ var
   LParamCount: NativeInt;
   LHandle: THandle;
 begin
-  inherited;
+  Create(APythonType);
   //Clear unsuccessful overloaded constructor error
   APythonType.Engine.PyErr_Clear();
 
@@ -2294,6 +2306,15 @@ begin
 end;
 
 { TPyDelphiMemoryStream }
+
+constructor TPyDelphiMemoryStream.CreateWith(APythonType: TPythonType; args, kwds: PPyObject);
+type
+  TMemoryStreamClass = class of TMemoryStream;
+begin
+  Create(APythonType);
+  if APythonType.Engine.PyArg_ParseTuple(args, ':Create') <> 0 then
+    DelphiObject := TMemoryStreamClass(DelphiObjectClass).Create;
+end;
 
 class function TPyDelphiMemoryStream.DelphiObjectClass: TClass;
 begin

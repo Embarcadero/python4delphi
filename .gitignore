@@ -38,24 +38,15 @@
 *.rc
 *.res
 *.local
-*.bak
-*.Patch
-*.#00
-*.pch
-AndroidManifest.template.xml
-AndroidManifest.xml
-/Tests/TestInsightSettings.ini
 
 # Output Folders  #
 ###################
 /Win32
 /Win64
 /OSX32
-__history/
-__recovery/
-/Modules/DelphiFMX/pyd
-/Modules/DelphiVCL/pyd
-/Modules/DelphiFMX/dcu
-/Modules/DelphiVCL/dcu
-Release/
-*.a
+/__history
+*.bak
+*.Patch
+*.#00
+*.pch
+/Tests/TestInsightSettings.ini

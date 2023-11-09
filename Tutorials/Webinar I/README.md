@@ -7,6 +7,6 @@
 
 - [Video replay](https://youtu.be/aCz5h96ObUM)
 
-- [Slides](Python4Delphi(Part1).pdf)
+- [Slides](https://www.slideshare.net/embarcaderotechnet/python-for-delphi-developers-part-1-introduction)
 
 - Source code included in this folder

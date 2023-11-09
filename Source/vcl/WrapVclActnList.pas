@@ -38,6 +38,7 @@ type
     property DelphiObject: TCustomActionList read GetDelphiObject
       write SetDelphiObject;
   end;
+
   TPyDelphiActionList = class (TPyDelphiCustomActionList)
   private
     function  GetDelphiObject: TActionList;
@@ -58,6 +59,7 @@ type
     property DelphiObject: TCustomAction read GetDelphiObject
       write SetDelphiObject;
   end;
+
   TPyDelphiAction = class(TPyDelphiContainedAction)
   private
     function GetDelphiObject: TAction;
@@ -98,15 +100,18 @@ class function TPyDelphiCustomActionList.DelphiObjectClass: TClass;
 begin
   Result := TCustomActionList;
 end;
+
 function TPyDelphiCustomActionList.GetDelphiObject: TCustomActionList;
 begin
   Result := TCustomActionList(inherited DelphiObject);
 end;
+
 procedure TPyDelphiCustomActionList.SetDelphiObject
   (const Value: TCustomActionList);
 begin
   inherited DelphiObject := Value;
 end;
+
 { TPyDelphiActionList }
 
 class function TPyDelphiActionList.DelphiObjectClass: TClass;
@@ -131,27 +136,34 @@ class function TPyDelphiCustomAction.DelphiObjectClass: TClass;
 begin
   Result := TCustomAction;
 end;
+
 function TPyDelphiCustomAction.GetDelphiObject: TCustomAction;
 begin
   Result := TCustomAction(inherited DelphiObject);
 end;
+
 procedure TPyDelphiCustomAction.SetDelphiObject(const Value: TCustomAction);
 begin
   inherited DelphiObject := Value;
 end;
+
 { TPyDelphiAction }
+
 class function TPyDelphiAction.DelphiObjectClass: TClass;
 begin
   Result := TAction;
 end;
+
 function TPyDelphiAction.GetDelphiObject: TAction;
 begin
   Result := TAction(inherited DelphiObject);
 end;
+
 procedure TPyDelphiAction.SetDelphiObject(const Value: TAction);
 begin
   inherited DelphiObject := Value;
 end;
+
 initialization
   RegisteredUnits.Add(TActnListRegistration.Create);
 end.

@@ -500,58 +500,6 @@ Type
   end;
 
   {
-    Abstract mapping relying on the object protocol.
-  }
-  TMappingAccess = class
-  private
-    FMapping: TObject;
-    FWrapper: TPyDelphiWrapper;
-  protected
-    function Wrap(const AObj: TObject;
-      const AOwnership: TObjectOwnership = soReference): PPyObject;
-  public
-    constructor Create(const AWrapper: TPyDelphiWrapper; const AMapping: TObject); virtual;
-
-    function Clone: TMappingAccess; virtual;
-
-    function GetSize: Integer; virtual; abstract;
-    function GetItem(const AIndexes: PPyObject): PPyObject; virtual; abstract;
-    function SetItem(const AIndexes: PPyObject;
-      const AValue: PPyObject): boolean; virtual; abstract;
-    function DelItem(const AIndexes: PPyObject): boolean; virtual; abstract;
-
-    class function ExpectedMappingClass: TClass; virtual; abstract;
-    class function Name: string; virtual;
-    class function SupportsWrite: boolean; virtual;
-
-    property Mapping: TObject read FMapping;
-    property Wrapper: TPyDelphiWrapper read FWrapper;
-  end;
-  TMappingAccessClass = class of TMappingAccess;
-
-  TPyDelphiMapping = class(TPyObject)
-  private
-    FPyDelphiWrapper: TPyDelphiWrapper;
-    FMappingAccess: TMappingAccess;
-  public
-    destructor Destroy; override;
-
-    class procedure SetupType(PythonType: TPythonType ); override;
-
-    procedure Setup(const APyDelphiWrapper: TPyDelphiWrapper;
-      const AMappingAccess: TMappingAccess);
-
-    function Repr: PPyObject; override;
-    // Mapping services
-    function MpLength: NativeInt; override;
-    function MpSubscript(obj: PPyObject): PPyObject; override;
-    function MpAssSubscript(obj1, obj2: PPyObject): Integer; override;
-
-    property PyDelphiWrapper: TPyDelphiWrapper read FPyDelphiWrapper;
-    property MappingAccess: TMappingAccess read FMappingAccess;
-  end;
-
-  {
     Base class allowing us to implement interfaces.
   }
   TPyInterfacedObject = class(TPyObject, IInterface)
@@ -575,27 +523,10 @@ Type
     Do not create  TPyDelphi or its subclasses directly - Instead use
     PyDelphiWrapper.Wrap
   }
-
-  {$IFDEF EXPOSE_MEMBERS}
-  TExposedMethodImplementation = class;
-  TExposedFieldImplementation = class;
-  TExposedPropertyImplementation = class;
-  TExposedIndexedPropertyImplementation = class;
-
-  TExposedMethodDefCallback = reference to function(const AName: string;
-    const AExposedMethod: TExposedMethodImplementation): boolean;
-  TExposedPropertyDefCallback = reference to function(const AName: string;
-    const AExposedProperty: TExposedPropertyImplementation): boolean;
-  TExposedIndexedPropertyDefCallback = reference to function(const AName: string;
-    const AExposedIndexedProperty: TExposedIndexedPropertyImplementation): boolean;
-  TExposedFieldDefCallback = reference to function(const AName: string;
-    const AExposedField: TExposedFieldImplementation): boolean;
-  {$ENDIF EXPOSE_MEMBERS}
-
   TPyDelphiObject = class (TPyInterfacedObject, IFreeNotificationSubscriber)
   private
     fDelphiObject: TObject;
-    fContainerAccess : TContainerAccess;
+    fContainerAccess: TContainerAccess;
     function  GetContainerAccess: TContainerAccess;
     procedure SetDelphiObject(const Value: TObject);
   protected
@@ -618,11 +549,31 @@ Type
     function Get_Bound(Acontext : Pointer) : PPyObject; cdecl;
     // implementation of interface IFreeNotificationSubscriber
     procedure Notify(ADeletedObject : TObject);
+    {$IFDEF EXTENDED_RTTI}
+    class function ExcludedExposedMembers(APythonType: TPythonType): TArray<string>; virtual;
+    class procedure ExposeMethods(AClass: TClass; NearestAncestorClass: TClass;
+      APythonType: TPythonType; APyDelphiWrapper: TPyDelphiWrapper;
+      AExcludedMethodNames: TArray<string> = []);
+    class procedure ExposeFields(AClass: TClass; NearestAncestorClass: TClass;
+      APythonType: TPythonType; APyDelphiWrapper: TPyDelphiWrapper;
+      AExcludedFieldNames: TArray<string> = []);
+    class procedure ExposeProperties(AClass: TClass; NearestAncestorClass: TClass;
+      APythonType: TPythonType; APyDelphiWrapper: TPyDelphiWrapper;
+      AExcludedPropertyNames: TArray<string> = []);
+    class procedure ExposeIndexedProperties(AClass: TClass; NearestAncestorClass: TClass;
+      APythonType: TPythonType; APyDelphiWrapper: TPyDelphiWrapper;
+      AExcludedPropertyNames: TArray<string> = []);
+    {$ENDIF EXTENDED_RTTI}
   public
     PyDelphiWrapper : TPyDelphiWrapper;
     Owned: Boolean;
 
     constructor Create( APythonType : TPythonType ); override;
+    // CreateWith raises a python TypeError 'Cannot create instances..'
+    // Subclasses that can be instantiated need to overwrite this method and
+    // a) Call the virtual constructor Create
+    // b) Create the pascal object and assign it to DelphiObject
+    constructor CreateWith(APythonType: TPythonType; args, kwds: PPyObject); override;
     destructor Destroy; override;
 
     function  GetAttrO( key: PPyObject) : PPyObject; override;
@@ -637,46 +588,16 @@ Type
     function  SqItem( idx : NativeInt ) : PPyObject; override;
     function  SqContains( obj: PPyObject): integer; override;
     function  SqAssItem( idx : NativeInt; obj : PPyObject) : Integer; override;
+    // Mapping services
+    {$IFDEF EXTENDED_RTTI}
+    function MpSubscript(obj: PPyObject) : PPyObject; override;
+    function MpAssSubscript(obj1, obj2: PPyObject) : Integer; override;
+    {$ENDIF EXTENDED_RTTI}
 
     class function  DelphiObjectClass : TClass; virtual;
     class procedure RegisterMethods( PythonType : TPythonType ); override;
     class procedure RegisterGetSets( PythonType : TPythonType ); override;
-    class procedure SetupType( PythonType : TPythonType ); override;
-    // Expose methods, properties and fields via RTTI at definition time
-    {$IFDEF EXPOSE_MEMBERS}
-    class function GetExcludedExposeMethods(
-      const APythonType: TPythonType): TArray<string>; virtual;
-    class function GetExcludedExposeGettersSetters(
-      const APythonType: TPythonType): TArray<string>; virtual;
-
-    class procedure ExposeMethods(const AClass: TClass;
-      const APythonType: TPythonType; const APyDelphiWrapper: TPyDelphiWrapper;
-      const ADeclaredMethodsOnly: boolean = false;
-      const AIncludedMethodNames: TArray<string> = [];
-      const AExcludedMethodNames: TArray<string> = [];
-      const ADefCallback: TExposedMethodDefCallback = nil); virtual;
-    class procedure ExposeProperties(const AClass: TClass;
-      const APythonType: TPythonType; const APyDelphiWrapper: TPyDelphiWrapper;
-      const ADeclaredPropertiesOnly: boolean = false;
-      const AIncludedPropertyNames: TArray<string> = [];
-      const AExcludedPropertyNames: TArray<string> = [];
-      const ADefCallback: TExposedPropertyDefCallback = nil); virtual;
-    class procedure ExposeIndexedProperties(const AClass: TClass;
-      const APythonType: TPythonType; const APyDelphiWrapper: TPyDelphiWrapper;
-      const ADeclaredPropertiesOnly: boolean = false;
-      const AIncludedPropertyNames: TArray<string> = [];
-      const AExcludedPropertyNames: TArray<string> = [];
-      const ADefCallback: TExposedIndexedPropertyDefCallback = nil); virtual;
-    class procedure ExposeFields(const AClass: TClass;
-      const APythonType: TPythonType; const APyDelphiWrapper: TPyDelphiWrapper;
-      const ADeclaredFieldsOnly: boolean = false;
-      const AIncludedFieldNames: TArray<string> = [];
-      const AExcludedFieldNames: TArray<string> = [];
-      const ADefCallback: TExposedFieldDefCallback = nil); virtual;
-
-    class procedure DynamicallyExposeMembers(const APythonType: TPythonType;
-      const APyDelphiWrapper: TPyDelphiWrapper);
-    {$ENDIF EXPOSE_MEMBERS}
+    class procedure SetupType(APythonType: TPythonType ); override;
     // if the class is a container (TStrings, TComponent, TCollection...),
     // then return the class implementing the access to the contained items.
     class function  GetContainerAccessClass : TContainerAccessClass; virtual;
@@ -690,6 +611,38 @@ Type
     property ContainerAccess : TContainerAccess read GetContainerAccess;
   end;
   TPyDelphiObjectClass = class of TPyDelphiObject;
+
+  {
+    Generic wrapper for pascal classes
+
+    Can be used from unit wrappers as follows:
+      APyDelphiWrapper.RegisterDelphiWrapper(TPyClassWrapper<TMyClass>);
+    or at runtime (e.g. inside the FormCreate handler:
+      PyDelphiWrapper1.RegisterDelphiWrapper(TPyClassWrapper<TMyClass>).Initialize;
+
+    if you want your class to capable of being instantiated from python then do:
+
+    TTestWrapper = class(TPyClassWrapper<TTest>)
+      constructor CreateWith(APythonType: TPythonType; args, kwds: PPyObject); overload; override;
+    end;
+
+    constuctor TTestWrapper.CreateWith(APythonType: TPythonType; args, kwds: PPyObject);
+    begin
+      Create(APythonType);
+      DelphiObject := TTest.Create;
+    end;
+
+    PyDelphiWrapper1.RegisterDelphiWrapper(TTestWrapper).Initialize;
+  }
+  TPyClassWrapper<T: class> = class(TPyDelphiObject)
+    function GetDelphiObject: T;
+    procedure SetDelphiObject(const Value: T);
+  public
+    class function  DelphiObjectClass : TClass; override;
+    class procedure RegisterMethods( PythonType : TPythonType ); override;
+    // Properties
+    property DelphiObject: T read GetDelphiObject write SetDelphiObject;
+  end;
 
   { This class will simply hold a Python object in its Value property.
     This is required for Delphi var parameters because Python  won't let you
@@ -720,11 +673,10 @@ Type
   { Base class for exposing Records and Interfaces when Extended RTTI is available }
   TPyRttiObject = class (TPyObject)
   private
-    FCopy: PValue;
+    fCopy: TValue;
     fAddr: Pointer;
     fRttiType: TRttiStructuredType;
     function GetValue: TValue; virtual; abstract;
-    function CreateCopy(const AValue: TValue): pointer;
   protected
     // Exposed Methods
     function SetProps(args, keywords : PPyObject) : PPyObject; cdecl;
@@ -732,14 +684,11 @@ Type
   public
     PyDelphiWrapper : TPyDelphiWrapper;
     constructor Create( APythonType : TPythonType ); override;
-    destructor Destroy; override;
     procedure SetAddrAndType(Address: Pointer; Typ: TRttiStructuredType);
-    procedure SetValueAndType(const AValue: TValue;
-      const ACopy: boolean = false);
+    procedure SetupFromTValue(const AValue: TValue);
 
     function  GetAttrO( key: PPyObject) : PPyObject; override;
     function  SetAttrO( key, value: PPyObject) : Integer; override;
-    function  Repr : PPyObject; override;
     property Addr: Pointer read fAddr;
     property RttiType: TRttiStructuredType read fRttiType;
     property Value: TValue read GetValue;
@@ -752,6 +701,7 @@ Type
   private
     function GetValue: TValue; override;
   public
+    function Repr : PPyObject; override;
     class procedure SetupType( PythonType : TPythonType ); override;
   end;
 
@@ -759,17 +709,17 @@ Type
   private
     function GetValue: TValue; override;
   public
+    function Repr : PPyObject; override;
     class procedure SetupType( PythonType : TPythonType ); override;
   end;
   {$ENDIF}
 
-  TEventHandler = class
+  TBaseEventHandler = class
   private
     fComponent: TObject;
   public
     PyDelphiWrapper : TPyDelphiWrapper;
     PropertyInfo : PPropInfo;
-    EventType : PTypeInfo;
     Callable : PPyObject;
     // connects to the event on creation
     constructor Create(PyDelphiWrapper : TPyDelphiWrapper; Component : TObject;
@@ -778,10 +728,14 @@ Type
     destructor Destroy; override;
     // Disconnects from the free notification event now
     procedure Unsubscribe;
-    // returns the type info of the supported event
-    class function GetTypeInfo : PTypeInfo; virtual; abstract;
     // properties
     property Component : TObject read fComponent;
+  end;
+
+  TEventHandler = class(TBaseEventHandler)
+  public
+    // returns the type info of the supported event
+    class function GetTypeInfo : PTypeInfo; virtual; abstract;
   end;
   TEventHandlerClass = class of TEventHandler;
 
@@ -791,7 +745,7 @@ Type
     fRegisteredClasses : TClassList;
     fPyDelphiWrapper: TPyDelphiWrapper;
     function GetCount: Integer;
-    function GetItem(AIndex: Integer): TEventHandler;
+    function GetItem(AIndex: Integer): TBaseEventHandler;
     function GetRegisteredClass(AIndex: Integer): TEventHandlerClass;
     function GetRegisteredClassCount: Integer;
   protected
@@ -802,7 +756,7 @@ Type
     constructor Create(APyDelphiWrapper : TPyDelphiWrapper);
     destructor Destroy; override;
 
-    function  Add(AEventHandler : TEventHandler) : Boolean;
+    function  Add(AEventHandler : TBaseEventHandler) : Boolean;
     procedure Clear;
     procedure Delete(AIndex : Integer);
     function  GetCallable(AComponent : TObject; APropInfo : PPropInfo) : PPyObject; overload;
@@ -814,7 +768,7 @@ Type
     function  Unlink(AComponent : TObject; APropInfo : PPropInfo) : Boolean;
 
     property Count : Integer read GetCount;
-    property Items[AIndex : Integer] : TEventHandler read GetItem; default;
+    property Items[AIndex : Integer] : TBaseEventHandler read GetItem; default;
     property PyDelphiWrapper : TPyDelphiWrapper read fPyDelphiWrapper;
   end;
 
@@ -917,6 +871,8 @@ Type
     fHelperClassRegister : TStringList;
     // Stores Created Event Handlers
     fEventHandlerList : TEventHandlers;
+    // Stores created exposed class members
+    fExposedMembers: TObjectList;
     fVarParamType: TPythonType;
 {$IFNDEF FPC}
     fDelphiMethodType: TPythonType;
@@ -933,7 +889,6 @@ Type
     FModule : TPythonModule;
     fDefaultIterType: TPythonType;
     fDefaultContainerType: TPythonType;
-    FDefaultMappingType: TPythonType;
     procedure CreateWrappers; virtual;
     procedure CreateModuleVars; virtual;
     procedure CreateModuleFunctions; virtual;
@@ -951,9 +906,9 @@ Type
     procedure Initialize; override;
     procedure Finalize; override;
     procedure DefineVar(const AName : string; const AValue : Variant); overload;
-    procedure DefineVar(const AName : string; AValue : TObject); overload;
+    procedure DefineVar(const AName : string; AValue : TObject; AOwnership: TObjectOwnership = soReference); overload;
     procedure DefineVar(const AName : string; AValue : TClass); overload;
-    procedure RegisterDelphiWrapper(AWrapperClass : TPyDelphiObjectClass);
+    function RegisterDelphiWrapper(AWrapperClass : TPyDelphiObjectClass): TPythonType;
     function  RegisterHelperType(APyObjectClass : TPyObjectClass) : TPythonType;
     function  RegisterFunction(AFuncName : PAnsiChar; AFunc : PyCFunction; ADocString : PAnsiChar ): PPyMethodDef; overload;
     function  RegisterFunction(AFuncName : PAnsiChar; AFunc : TDelphiMethod; ADocString : PAnsiChar ): PPyMethodDef; overload;
@@ -962,24 +917,23 @@ Type
     function Wrap(AObj : TObject; AOwnership: TObjectOwnership = soReference) : PPyObject;
     function WrapClass(AClass: TClass): PPyObject;
     {$IFDEF EXTENDED_RTTI}
-    //  Function that provides a Python object wrapping a record
+    //  Functions that provides a Python object wrapping a record
+    //  The first overload wraps the record itself and the record needs to be kept alive.
+    //  The second overload wraps a copy of the record contained in a TValue
     function WrapRecord(Address: Pointer; Typ: TRttiStructuredType): PPyObject; overload;
-    function WrapRecord(const AValue: TValue; const ACopy: boolean = false): PPyObject; overload;
+    function WrapRecord(const AValue: TValue): PPyObject; overload;
     //  Function that provides a Python object wrapping an interface
     //  Note the the interface must be compiled in {$M+} mode and have a guid
+    //  The interface will be kept alive as long as python has areference to it.
     //  Usage: WrapInterface(TValue.From(YourInterfaceReference))
-    //  Warning: WrapInterface represents a weak (uncounted) reference!
-    //           Use ACopy = True to retrieve a normal counted reference
-    //           that will keep the interface alive as long as python has a
-    //           reference to it.
-    function WrapInterface(const IValue: TValue; const ACopy: boolean = false): PPyObject;
+    function WrapInterface(const IValue: TValue): PPyObject;
+    procedure DefineVar(const AName: string; AValue: TValue); overload;
     {$ENDIF}
     // properties
     property EventHandlers : TEventHandlers read fEventHandlerList;
     // Helper types
     property DefaultContainerType : TPythonType read fDefaultContainerType;
     property DefaultIterType : TPythonType read fDefaultIterType;
-    property DefaultMappingType: TPythonType read FDefaultMappingType;
 {$IFNDEF FPC}
     property DelphiMethodType : TPythonType read fDelphiMethodType;
 {$ENDIF}
@@ -988,201 +942,27 @@ Type
     property Module : TPythonModule read FModule write SetModule;
   end;
 
-  TAbstractExposedMemberImplementation = class abstract(TComponent)
-  private
-    FName: AnsiString;
-    FDocString: AnsiString;
-    FPyDelphiWrapper: TPyDelphiWrapper;
-    FPythonType: TPythonType;
-  protected
-    function GetDefaultDocString(): string; virtual; abstract;
-  public
-    constructor Create(AOwner: TComponent; const AName: string;
-      const APyDelphiWrapper: TPyDelphiWrapper; const APythonType: TPythonType); reintroduce;
-
-    property Name: AnsiString read FName;
-    property DocString: AnsiString read FDocString write FDocString;
-    property PyDelphiWrapper: TPyDelphiWrapper read FPyDelphiWrapper write FPyDelphiWrapper;
-    property PythonType: TPythonType read FPythonType write FPythonType;
+{$IFDEF EXTENDED_RTTI}
+  // Documentation hook interface
+  // Implement to customize the creation of docstrings for exposed class members
+  IDocServer = interface
+    ['{4AF0D319-47E9-4F0A-9C71-97B8CBB559FF}']
+    function ReadTypeDocStr(ATypeInfo: PTypeInfo; out ADocStr: string): Boolean;
+    function ReadMemberDocStr(AMember: TRttiMember; out ADocStr: string): Boolean;
+    procedure Initialize;
+    procedure Finalize;
+    function Initialized: Boolean;
   end;
 
-  /// <summary>
-  ///   Using standard function signature for methods.
-  ///   Signature is a string of the format
-  ///     <function_name>(<signature>) -> <return type>
-  ///   or perhaps without the return type.
-
-  ///   Using Google Docstrings Style for fields and properties. It is a string of the format
-  ///     <type: docstring>
-  ///   See: https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html
-  /// </summary>
-  TExposedMemberDocStringsBuilder = class
-  private
-    class function TranslateType(const ARttiObject: TRttiObject): string;
-    /// <summary>
-    ///   Creates method annotation for type inference in doc. strings.
-    /// </summary>
-    class function GetMethodTypeAnnotation(
-      const ARttiMethod: TRttiMethod): string;
-    /// <summary>
-    ///   Creates field annotation for type inference in doc. strings.
-    /// </summary>
-    class function GetFieldTypeAnnotation(const ARttiField: TRttiField): string;
-    /// <summary>
-    ///   Creates property annotation for type inference in doc. strings.
-    /// </summary>
-    class function GetPropertyTypeAnnotation(
-      const ARttiProperty: TRttiProperty): string;
-    /// <summary>
-    ///   Creates indexed property annotation for type inference in doc. strings.
-    /// </summary>
-    class function GetIndexedPropertyTypeAnnotation(
-      const ARttiIndexedProperty: TRttiIndexedProperty): string;
-  public
-    /// <summary>
-    ///   Creates member annotation for type inference in doc. strings.
-    /// </summary>
-    class function GetTypeAnnotation(const ARttiMember: TRttiMember): string;
-    /// <summary>
-    ///   Query the doc. server to read member docs.
-    /// </summary>
-    class function GetDocStringFromDocServer(const AParentInfo: PTypeInfo;
-      const ARttiMember: TRttiMember): string;
-    /// <summary>
-    ///   Join docstring and type annotation.
-    /// </summary>
-    class function BuildDocs(const ADocString, ATypeAnnotation: string): string; overload;
-    /// <summary>
-    ///   Join doc. server doc. strings and type annotation.
-    /// </summary>
-    class function BuildDocs(const ARttiMember: TRttiMember): string; overload;
-  end;
-
-  {$IFDEF EXPOSE_MEMBERS}
-  TExposedMethodImplementation = class(TAbstractExposedMemberImplementation)
-  public type
-    TExposedMethodHandler = reference to function(const APPyObject: PPyObject; const AObj1, AObj2: PPyObject): PPyObject;
-  private
-    FMethodHandler: TExposedMethodHandler;
-    FImplementation: TMethodImplementation;
-    FRttiType: TRttiType;
-    FIsClassMethod: boolean;
-    fIsStaticMethod: boolean;
-  protected
-    function GetDefaultDocString(): string; override;
-  public
-    constructor Create(AOwner: TComponent; const AName: string;
-      const APyDelphiWrapper: TPyDelphiWrapper; const APythonType: TPythonType;
-      const ARttiType: TRttiType;
-      const AIsClassMethod: boolean = false;
-      const AIsStaticMethod: boolean = false); reintroduce;
-    destructor Destroy(); override;
-
-    function VirtualMethodImplementation(): pointer;
-
-    class function Methods_Wrapper(const ASelf, AArgs, AKeyWords: PPyObject): PPyObject; static; cdecl;
-
-    property MethodHandler: TExposedMethodHandler read FMethodHandler write FMethodHandler;
-  end;
-
-  TExposedGetSetImplementation = class(TAbstractExposedMemberImplementation)
-  public type
-    TExposedGetHandler = reference to function(const APyObject: TPyObject; const AContext: Pointer): PPyObject;
-    TExposedSetHandler = reference to function(const APyObject: TPyObject; const AArg: PPyObject; const AContext: Pointer): integer;
-  private
-    FGetHandler: TExposedGetHandler;
-    FSetHandler: TExposedSetHandler;
-    FGetImplementation: TMethodImplementation;
-    FSetImplementation: TMethodImplementation;
-    FRttiType: TRttiType;
-  public
-    constructor Create(AOwner: TComponent; const AName: string;
-      const APyDelphiWrapper: TPyDelphiWrapper; const APythonType: TPythonType;
-      const ARttiType: TRttiType); reintroduce;
-    destructor Destroy(); override;
-
-    function VirtualGetImplementation(): pointer;
-    function VirtualSetImplementation(): pointer;
-
-    class function Get_Wrapper(const AObj: PPyObject; const AContext : Pointer): PPyObject; static; cdecl;
-    class function Set_Wrapper(const AObj, AValue: PPyObject; const AContext: Pointer): integer; static; cdecl;
-
-    property GetHandler: TExposedGetHandler read FGetHandler write FGetHandler;
-    property SetHandler: TExposedSetHandler read FSetHandler write FSetHandler;
-  end;
-
-  TExposedFieldImplementation = class(TExposedGetSetImplementation)
-  protected
-    function GetDefaultDocString(): string; override;
-  end;
-
-  TExposedPropertyImplementation = class(TExposedGetSetImplementation)
-  protected
-    function GetDefaultDocString(): string; override;
-  end;
-
-  TExposedIndexedPropertyImplementation = class(TAbstractExposedMemberImplementation)
-  private type
-    TIndexedPropertyAccessClass = class of TIndexedPropertyAccess;
-    TIndexedPropertyAccess = class(TMappingAccess)
-    private
-      FPropertyName: string;
-      FParentType: TRttiType;
-      FPythonType: TPythonType;
-    public
-      function GetSize: Integer; override;
-
-      function GetItem(const AIndexes: PPyObject): PPyObject; override;
-      function SetItem(const AIndexes: PPyObject; const AValue: PPyObject): boolean; override;
-      function DelItem(const AIndexes: PPyObject): boolean; override;
-
-      class function ExpectedMappingClass: TClass; override;
-      class function SupportsWrite: Boolean; override;
-      class function Name: string; override;
-
-      property PropertyName: string read FPropertyName write FPropertyName;
-      property ParentType: TRttiType read FParentType write FParentType;
-      property PythonType: TPythonType read FPythonType write FPythonType;
-    end;
-
-    TIndexedPropertyReadOnlyAccess = class(TIndexedPropertyAccess)
-    public
-      class function SupportsWrite: Boolean; override;
-    end;
-  public type
-    TExposedIndexedPropertyHandler = reference to function(const APyObject: TPyObject; const AContext: Pointer): PPyObject;
-  private
-    FIndexedPropertyHandler: TExposedIndexedPropertyHandler;
-    FImplementation: TMethodImplementation;
-    FRttiType: TRttiType;
-  protected
-    function GetAccessClass: TIndexedPropertyAccessClass; virtual;
-    function GetDefaultDocString(): string; override;
-  public
-    constructor Create(AOwner: TComponent; const AName: string;
-      const APyDelphiWrapper: TPyDelphiWrapper; const APythonType: TPythonType;
-      const ARttiType: TRttiType); reintroduce;
-    destructor Destroy(); override;
-
-    function VirtualMethodImplementation(): pointer;
-
-    class function IndexedProperty_Wrapper(const AObj: PPyObject; const AContext : Pointer): PPyObject; static; cdecl;
-
-    property IndexedPropertyHandler: TExposedIndexedPropertyHandler read FIndexedPropertyHandler write FIndexedPropertyHandler;
-  end;
-
-  TExposedIndexedPropertyReadOnlyImplementation = class(TExposedIndexedPropertyImplementation)
-  protected
-    function GetAccessClass: TExposedIndexedPropertyImplementation.TIndexedPropertyAccessClass; override;
-  end;
-  {$ENDIF EXPOSE_MEMBERS}
+  var
+    PyDocServer: IDocServer = nil;
+{$ENDIF}
 
   { Singletons }
   function RegisteredUnits : TRegisteredUnits;
   function GlobalDelphiWrapper: TPyDelphiWrapper;
 
   { Helper Functions }
-
   function  CheckIndex(AIndex, ACount : Integer; const AIndexName : string = 'Index') : Boolean;
   function  CheckIntAttribute(AAttribute : PPyObject; const AAttributeName : string; out AValue : Integer) : Boolean;
   function  CheckFloatAttribute(AAttribute : PPyObject; const AAttributeName : string; out AValue : Double) : Boolean;
@@ -1192,10 +972,10 @@ Type
                               AExpectedClass : TClass;
                               out AValue : TObject) : Boolean;
   function  CheckCallableAttribute(AAttribute : PPyObject; const AAttributeName : string) : Boolean;
-  function  CheckEnum(const AEnumName : string; AValue, AMinValue, AMaxValue : Integer) : Boolean;
-  function  CreateVarParam(PyDelphiWrapper : TPyDelphiWrapper; const AValue : Variant) : PPyObject; overload;
+  function  CheckEnum(const AEnumName : string; AValue, AMinValue, AMaxValue: Integer) : Boolean;
+  function  CreateVarParam(PyDelphiWrapper : TPyDelphiWrapper; const AValue: Variant) : PPyObject; overload;
   function  CreateVarParam(PyDelphiWrapper : TPyDelphiWrapper; AObject: TObject) : PPyObject; overload;
-  function  CreateVarParam(const PyDelphiWrapper: TPyDelphiWrapper; const AClass: TClass): PPyObject; overload;
+  function  CreateVarParam(PyDelphiWrapper: TPyDelphiWrapper; AClass: TClass): PPyObject; overload;
   function  SetToPython(ATypeInfo: PTypeInfo; AValue : Integer) : PPyObject; overload;
   function  SetToPython(APropInfo: PPropInfo; AValue : Integer) : PPyObject; overload;
   function  SetToPython(AInstance: TObject; APropInfo: PPropInfo) : PPyObject; overload;
@@ -1205,19 +985,29 @@ Type
   procedure RaiseNotifyEvent(PyDelphiWrapper : TPyDelphiWrapper; ACallable : PPyObject; Sender: TObject);
   {Sets mulptiple properties of PyObject from keywords argument}
   function SetProperties(PyObject: PPyObject; keywords: PPyObject): PPyObject;
+  function ValidateClassRef(PyValue: PPyObject; RefClass: TClass;
+    out ClassRef: TClass; out ErrMsg: string): Boolean;
+  procedure InvalidArguments(const MethName, ErrMsg : string);
+{$IFDEF EXTENDED_RTTI}
+  function  CreateVarParam(PyDelphiWrapper : TPyDelphiWrapper;
+    const AValue: TValue) : PPyObject; overload;
+  function TValueToPyObject(const Value: TValue;
+    DelphiWrapper: TPyDelphiWrapper; out ErrMsg: string): PPyObject;
+  function PyObjectToTValue(PyArg : PPyObject; ArgType: TRttiType;
+   out Arg: TValue; out ErrMsg: string): Boolean;
+{$ENDIF}
+
 
 implementation
 
 Uses
   Math,
   StrUtils,
-  RTLConsts
-  {$IFDEF EXPOSE_MEMBERS}
-  , PythonDocs
-  {$ENDIF EXPOSE_MEMBERS}
-  ;
+  RTLConsts,
+  MethodCallback;
 
 resourcestring
+  rs_CannotCreate = 'Cannot create instances of class %s';
   rs_ErrCheckIndex = '%s "%d" out of range';
   rs_ErrCheckInt = '%s receives only integer values';
   rs_ErrCheckFloat = '%s receives only float values';
@@ -1228,12 +1018,11 @@ resourcestring
   rs_ErrCheckObj = '%s receives only Delphi objects';
   rs_ErrSqAss = 'Container %s does not support indexed write (f[i] = x)';
   rs_ErrSqContains = 'Container %s does not support the Contains protocol';
-  rs_ErrMpAssSubscript = 'Mapping %s does not support indexed write (f[i, s] = x)';
   rs_ErrCheckBound = 'Delphi wrapper %s is not bound';
   rs_ErrSequence = 'Wrapper %s does not support sequences';
   rs_ErrInvalidArgs = '"%s" called with invalid arguments.'#$A'Error: %s';
   rs_ErrInvalidRet = 'Call "%s" returned a value that could not be coverted to Python'#$A'Error: %s';
-  rs_IncompatibleArguments = 'Could not find a method with compatible arguments';
+  rs_IncompatibleArguments = 'Expected and actual arguements are incompatible';
   rs_ErrAttrGet = 'Error in getting property "%s".'#$A'Error: %s';
   rs_UnknownAttribute = 'Unknown attribute';
   rs_ErrIterSupport = 'Wrapper %s does not support iterators';
@@ -1241,17 +1030,20 @@ resourcestring
   rs_IncompatibleClasses = 'Incompatible classes';
   rs_IncompatibleRecords = 'Incompatible record types';
   rs_IncompatibleInterfaces = 'Incompatible interfaces';
+  rs_IncompatiblePythonType = 'Incompatible python value type';
   rs_NotPublished = 'Event handling is available only for published properties';
   rs_ExpectedObject = 'Expected a Pascal object';
   rs_ExpectedRecord = 'Expected a Pascal record';
   rs_ExpectedClass = 'Expected a Pascal class';
+  rs_ExpectedNil = 'In static methods Self should be nil';
   rs_ExpectedInterface = 'Expected a Pascal interface';
+  rs_ExpectedSequence = 'Expected a python sequence';
   rs_InvalidClass = 'Invalid class';
   rs_ErrEventNotReg = 'No Registered EventHandler for events of type "%s';
   rs_ErrEventNoSuport = 'Class %s does not support events because it must '+
     'either inherit from TComponent or implement interface IFreeNotification';
   rs_ErrEventExpectCallable = 'You can only assign a callable to method property "%s"';
-  rs_NotWritable = 'The class members  is not writable';
+  rs_NotWritable = 'The class member is not writable';
   rs_NotReadable = 'The class member is not readable';
   rs_NoAccess = 'Private and protected class members cannot be accessed';
   rs_ErrValueToPython = 'Unsupported conversion from TValue to Python value';
@@ -1259,659 +1051,793 @@ resourcestring
   rs_ErrNoTypeInfo = 'TypeInfo is not available';
   rs_ErrUnexpected = 'Unexpected error';
 
+
+{$REGION 'TRttiInvokableTypeHelper - "Lifted" from Spring4D"'}
+{***************************************************************************}
+{                                                                           }
+{           Spring Framework for Delphi                                     }
+{                                                                           }
+{           Copyright (c) 2009-2018 Spring4D Team                           }
+{                                                                           }
+{           http://www.spring4d.org                                         }
+{                                                                           }
+{***************************************************************************}
+{                                                                           }
+{  Licensed under the Apache License, Version 2.0 (the "License");          }
+{  you may not use this file except in compliance with the License.         }
+{  You may obtain a copy of the License at                                  }
+{                                                                           }
+{      http://www.apache.org/licenses/LICENSE-2.0                           }
+{                                                                           }
+{  Unless required by applicable law or agreed to in writing, software      }
+{  distributed under the License is distributed on an "AS IS" BASIS,        }
+{  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. }
+{  See the License for the specific language governing permissions and      }
+{  limitations under the License.                                           }
+{                                                                           }
+{***************************************************************************}
+type
+  TRttiInvokableTypeHelper = class helper for TRttiInvokableType
+  public
+    function CreateImplementation(AUserData: Pointer;
+      const ACallback: TMethodImplementationCallback): TMethodImplementation;
+  end;
+
+  // this is the class used to create a TMethodImplementation for a
+  // TRttiInvokableType by passing in an instance of TRttiInvokableType
+  // and "overriding" its private virtual methods
+  TRttiInvokableMethod = class(TRttiMethod)
+  private
+    FType: TRttiInvokableType;
+    constructor Create(AType: TRttiInvokableType);
+  end;
+
+  // this classes is needed to access FParent
+  // it needs to have the exact same fields as System.Rtti.TRttiObject
+  TRttiObjectHack = class abstract
+  protected
+    FHandle: Pointer;
+    FRttiDataSize: Integer;
+    FPackage: TRttiPackage;
+    FParent: TRttiObject;
+  end;
+
+  // this class is needed to "override" private virtual methods
+  // it needs to have the exact same virtual methods as System.Rtti.TRttiMethod
+  TRttiInvokableMethodHack = class(TRttiMember)
+  protected
+    FInvokeInfo: TObject; //TMethodImplementation.TInvokeInfo
+    FType: TRttiInvokableType;
+    function GetMethodKind: TMethodKind; virtual; abstract;
+    function GetCallingConvention: TCallConv; virtual;
+    function GetReturnType: TRttiType; virtual;
+    function GetDispatchKind: TDispatchKind; virtual; abstract;
+    function GetHasExtendedInfo: Boolean; virtual; abstract;
+    function GetVirtualIndex: SmallInt; virtual; abstract;
+    function GetCodeAddress: Pointer; virtual; abstract;
+    function GetIsClassMethod: Boolean; virtual;
+    function GetIsStatic: Boolean; virtual;
+    function DispatchInvoke(Instance: TValue; const Args: array of TValue): TValue; virtual; abstract;
+  public
+    function GetParameters: TArray<TRttiParameter>; virtual;
+  end;
+
+  // this class is needed to "override" the destructor of
+  // the TMethodImplementation instances that are created inside of
+  // TRttiMethod.CreateImplementation
+  TMethodImplementationHack = class(TMethodImplementation)
+  public
+    destructor Destroy; override;
+  end;
+
+function TRttiInvokableMethodHack.GetCallingConvention: TCallConv;
+begin
+  Result := FType.CallingConvention;
+end;
+
+function TRttiInvokableMethodHack.GetIsClassMethod: Boolean;
+begin
+  Result := False;
+end;
+
+function TRttiInvokableMethodHack.GetIsStatic: Boolean;
+begin
+  Result := FType is TRttiProcedureType;
+end;
+
+function TRttiInvokableMethodHack.GetParameters: TArray<TRttiParameter>;
+begin
+  Result := FType.GetParameters;
+end;
+
+function TRttiInvokableMethodHack.GetReturnType: TRttiType;
+begin
+  Result := FType.ReturnType;
+end;
+
+destructor TMethodImplementationHack.Destroy;
+begin
+  if FInvokeInfo <> nil then
+    FInvokeInfo.Free;
+  inherited Destroy;
+end;
+
+constructor TRttiInvokableMethod.Create(AType: TRttiInvokableType);
+var
+  ctx: TRttiContext;
+begin
+  // GetInvokeInfo need the Parent property
+  TRttiObjectHack(Self).FParent := ctx.GetType(TObject);
+  FType := AType;
+  // change the type of this class to the class that has its private
+  // methods "overridden"
+  PPointer(Self)^ := TRttiInvokableMethodHack;
+end;
+
+function TRttiInvokableTypeHelper.CreateImplementation(AUserData: Pointer; //FI:O804
+  const ACallback: TMethodImplementationCallback): TMethodImplementation;
+var
+  m: TRttiMethod;
+begin
+  {$WARN CONSTRUCTING_ABSTRACT OFF}
+  m := TRttiInvokableMethod.Create(Self);
+  try
+    // there is no way to directly create a TMethodImplementation instance
+    // because it requires an instance of the private TInvokeInfo class to be
+    // passed which can only be produced by the private method GetInvokeInfo
+
+    // since TRttiInvokableMethod has the necessary private virtual methods
+    // "overridden" it will create the correct TMethodImplementation instance
+    // for the given TRttiInvokableType
+    Result := m.CreateImplementation(AUserData, ACallback);
+    // "override" the destructor so FInvokeMethod which is not owned by the
+    // TRttiInvokableMethod is properly destroyed at the end
+    PPointer(Result)^ := TMethodImplementationHack;
+  finally
+    m.Free;
+  end;
+end;
+{$ENDREGION 'TRttiInvokableTypeHelper - "Lifted from Spring4D"'}
+
+
 var
   gRegisteredUnits : TRegisteredUnits;
 
 {$IFDEF EXTENDED_RTTI}
-  function RttiCall(ParentAddress: pointer; PythonType: TPythonType;
-    DelphiWrapper: TPyDelphiWrapper; MethName: string;
-    ParentRtti: TRttiStructuredType; ob1, ob2: PPyObject;
-    AParentAddrIsClass: boolean = false): PPyObject; forward;
-  function GetRttiAttr(ParentAddr: Pointer; ParentType: TRttiStructuredType;
-    const AttrName: string; PyDelphiWrapper: TPyDelphiWrapper;
-    out ErrMsg: string): PPyObject; forward;
-  function SetRttiAttr(const ParentAddr: Pointer;  ParentType: TRttiStructuredType;
-    const AttrName: string; Value: PPyObject;  PyDelphiWrapper: TPyDelphiWrapper;
-    out ErrMsg: string): Boolean; forward;
-{$ENDIF EXTENDED_RTTI}
+function RttiCall(ParentAddress: pointer; DelphiWrapper: TPyDelphiWrapper;
+  MethName: string; ParentRtti: TRttiStructuredType; ob1, ob2: PPyObject;
+  AParentAddrIsClass: Boolean = false): PPyObject; overload; forward;
 
-{ TAbstractExposedMethodImplementation }
+function RttiCall(ParentAddress: pointer; DelphiWrapper: TPyDelphiWrapper;
+  Method: TRttiMethod; ob1, ob2: PPyObject;
+  AParentAddrIsClass: Boolean = false): PPyObject; overload; forward;
 
-constructor TAbstractExposedMemberImplementation.Create(AOwner: TComponent;
-  const AName: string; const APyDelphiWrapper: TPyDelphiWrapper;
-  const APythonType: TPythonType);
+  function RttiCall(ParentAddress: pointer; DelphiWrapper: TPyDelphiWrapper;
+  Method: TRttiMethod; const Args: TArray<TValue>;
+  const  VarParamIndices: TArray<Integer>;
+  AParentAddrIsClass: Boolean = false): PPyObject; overload; forward;
+
+function GetRttiProperty(ParentAddr: Pointer; Prop: TRttiProperty;
+ PyDelphiWrapper: TPyDelphiWrapper; out ErrMsg: string): PPyObject; forward;
+
+function GetRttiField(ParentAddr: Pointer; Field: TRttiField;
+ PyDelphiWrapper: TPyDelphiWrapper; out ErrMsg: string): PPyObject; forward;
+
+function SetRttiProperty(const ParentAddr: Pointer;  Prop: TRttiProperty;
+  Value: PPyObject;  PyDelphiWrapper: TPyDelphiWrapper;
+  out ErrMsg: string): Boolean; forward;
+
+function SetRttiField(const ParentAddr: Pointer;  Field: TRttiField;
+  Value: PPyObject;  PyDelphiWrapper: TPyDelphiWrapper;
+  out ErrMsg: string): Boolean; forward;
+
+function ValidateClassProperty(PyValue: PPyObject; TypeInfo: PTypeInfo;
+  out Obj: TObject; out ErrMsg: string): Boolean; forward;
+
+type
+  TAbstractExposedMember = class abstract
+  protected
+    FName: AnsiString;
+    FDocString: AnsiString;
+    FPyDelphiWrapper: TPyDelphiWrapper;
+    FPythonType: TPythonType;
+    FRttiMember: TRttiMember;
+    FParentRtti: TRttiStructuredType;
+    function GetDefaultDocString(): string; virtual; abstract;
+  public
+    constructor Create(ARttiMember: TRttiMember;
+      APyDelphiWrapper: TPyDelphiWrapper; APythonType: TPythonType;
+      AParentRtti: TRttiStructuredType);
+    property DocString: AnsiString read FDocString write FDocString;
+    property Name: AnsiString read FName;
+  end;
+
+  TExposedMethod = class(TAbstractExposedMember)
+  private
+    FCallback: Pointer;
+    function GetRttiMethod: TRttiMethod;
+    function GetCallback: Pointer;
+  protected
+    function GetDefaultDocString(): string; override;
+  public
+    destructor Destroy; override;
+    function MethodWrapper(ASelf, Args, Kwds: PPyObject): PPyObject; cdecl;
+    property RttiMethod: TRttiMethod read GetRttiMethod;
+    property Callback: Pointer read GetCallback;
+  end;
+
+  TExposedGetSet = class(TAbstractExposedMember)
+  private
+    FGetterCallback: Pointer;
+    FSetterCallback: Pointer;
+    function GetGetterCallback: Pointer;
+    function GetSetterCallback: Pointer;
+  public
+    destructor Destroy; override;
+    function GetterWrapper(AObj: PPyObject; AContext : Pointer): PPyObject; virtual; cdecl;
+    function SetterWrapper(AObj, AValue: PPyObject; AContext: Pointer): Integer; virtual; cdecl;
+    property GetterCallback: Pointer read GetGetterCallback;
+    property SetterCallback: Pointer read GetSetterCallback;
+  end;
+
+  TExposedField = class(TExposedGetSet)
+  protected
+    function GetDefaultDocString(): string; override;
+  end;
+
+  TExposedProperty = class(TExposedGetSet)
+  protected
+    function GetDefaultDocString(): string; override;
+  end;
+
+  TExposedEvent = class(TExposedGetSet)
+  protected
+    function GetDefaultDocString(): string; override;
+  public
+    function GetterWrapper(AObj: PPyObject; AContext : Pointer): PPyObject; override; cdecl;
+    function SetterWrapper(AObj, AValue: PPyObject; AContext: Pointer): Integer; override; cdecl;
+  end;
+
+  TPyIndexedProperty = class(TPyObject)
+  private
+    FPyObj: PPyObject;
+    FPyWrapper: TPyDelphiWrapper;
+    FProperty: TRttiIndexedProperty;
+  public
+    destructor Destroy; override;
+    procedure Setup(PyObj: PPyObject; Wrapper: TPyDelphiWrapper; Prop: TRttiIndexedProperty);
+    class procedure SetupType(PythonType: TPythonType); override;
+    // Mapping services
+    function MpSubscript(obj: PPyObject) : PPyObject; override;
+    function MpAssSubscript(obj1, obj2: PPyObject) : Integer; override;
+  end;
+
+  TExposedIndexedProperty = class(TExposedGetSet)
+  protected
+    function GetDefaultDocString(): string; override;
+  public
+    function GetterWrapper(AObj: PPyObject; AContext : Pointer): PPyObject; override; cdecl;
+  end;
+
+  TRttiEventHandler = class(TBaseEventHandler)
+  private
+    FMethodImplementation: TMethodImplementation;
+  public
+    MethodType: TRttiMethodType;
+    function CodeAddress: Pointer;
+    constructor Create(PyDelphiWrapper: TPyDelphiWrapper; Component: TObject;
+      PropertyInfo: PPropInfo; Callable: PPyObject;
+      AMethodType: TRttiMethodType); reintroduce;
+    destructor Destroy; override;
+    class procedure ImplCallback(UserData: Pointer; const Args: TArray<TValue>;
+    out Result: TValue); static;
+  end;
+
+{ TAbstractExposedMember }
+
+constructor TAbstractExposedMember.Create(ARttiMember: TRttiMember;
+  APyDelphiWrapper: TPyDelphiWrapper; APythonType: TPythonType;
+  AParentRtti: TRttiStructuredType);
 begin
-  inherited Create(AOwner);
-  FName := AnsiString(AName);
-  FDocString := AnsiString(GetDefaultDocString());
+  inherited Create;
+  FRttiMember := ARttiMember;
+  FName := AnsiString(ARttiMember.Name);
   FPyDelphiWrapper := APyDelphiWrapper;
   FPythonType := APythonType;
+  FParentRtti := AParentRtti;
+  FDocString := UTF8Encode(GetDefaultDocString);
 end;
 
-{ TExposedMemberDocStringsBuilder }
+{ TExposedMethod }
 
-class function TExposedMemberDocStringsBuilder.TranslateType(
-  const ARttiObject: TRttiObject): string;
-
-  function TranslateMethod(const ARttiMethod: TRttiMethod): string;
-  const
-    METHOD_DOC_STR_PATTERN = 'Callable[[%s], %s]';
-  var
-    LParams: TArray<string>;
-    LParam: TRttiParameter;
+function TExposedMethod.GetCallback: Pointer;
+var
+  Method: TDelphiMethodWithKW;
+begin
+  if FCallback = nil then
   begin
-    LParams := nil;
-    for LParam in ARttiMethod.GetParameters() do
-      LParams := LParams + [TranslateType(LParam.ParamType)];
-
-    Result := Format(METHOD_DOC_STR_PATTERN, [
-      String.Join(', ', LParams),
-      TranslateType(ARttiMethod.ReturnType)]);
+    Method := MethodWrapper;
+    FCallBack := GetOfObjectCallBack(TCallBack(Method), 3, DEFAULT_CALLBACK_TYPE);
   end;
+  Result := FCallback;
+end;
 
-  function TranslateInvokable(const ARttiInvokableType: TRttiInvokableType): string;
-  const
-    INVOKABLE_DOC_STR_PATTERN = 'Callable[[%s], %s]';
-  var
-    LParams: TArray<string>;
-    LParam: TRttiParameter;
+function TExposedMethod.GetRttiMethod: TRttiMethod;
+begin
+  Result := FRttiMember as TRttiMethod;
+end;
+
+destructor TExposedMethod.Destroy;
+begin
+  if FCallback <> nil then
+    DeleteCallback(FCallback);
+  inherited;
+end;
+
+function TExposedMethod.GetDefaultDocString: string;
+begin
+  Result := Format('<Method %s of type %s at %x>', [
+      RttiMethod.Name, FParentRtti.Name, NativeInt(RttiMethod.CodeAddress)]);
+end;
+
+function TExposedMethod.MethodWrapper(ASelf, Args, Kwds: PPyObject): PPyObject;
+var
+  ParentAddress: Pointer;
+  RefClass, ClassRef: TClass;
+  ErrMsg: string;
+begin
+  if RttiMethod.IsStatic then
   begin
-    LParams := nil;
-    for LParam in ARttiInvokableType.GetParameters() do
-      LParams := LParams + [TranslateType(LParam.ParamType)];
-
-    Result := Format(INVOKABLE_DOC_STR_PATTERN, [
-      String.Join(', ', LParams),
-      TranslateType(ARttiInvokableType.ReturnType)]);
-  end;
-
-begin
-  if not Assigned(ARttiObject) then
-    Result := 'None'
-  else if PTypeInfo(TypeInfo(boolean)) = ARttiObject.Handle then
-    Result := 'bool'
-  else if ARttiObject.InheritsFrom(TRttiMethod) then
-    Result := TranslateMethod(ARttiObject as TRttiMethod)
-  else if ARttiObject.InheritsFrom(TRttiInvokableType) then
-    Result := TranslateInvokable(ARttiObject as TRttiInvokableType)
-  else if ARttiObject.InheritsFrom(TRttiType) then
-    case TRttiType(ARttiObject).TypeKind of
-      tkUnknown,
-      tkVariant,
-      tkSet, tkEnumeration,
-      tkClass, tkMethod, tkProcedure, tkClassRef, tkPointer,
-      tkRecord, tkMRecord,
-      tkInterface:
-        Result := TRttiType(ARttiObject).Name.Replace('T', '', []);
-      tkInteger, tkInt64:
-        Result := 'int';
-      tkChar:
-        Result := 'ansichr(bytes)';
-      tkWChar:
-        Result := 'unicodechr(str)';
-      tkFloat:
-        Result := 'float';
-      tkString, tkUString, tkWString:
-        Result := 'str';
-      tkLString:
-        Result := 'ansistr(bytes)';
-      tkArray, tkDynArray:
-        Result := 'tuple';
-    end;
-end;
-
-class function TExposedMemberDocStringsBuilder.GetMethodTypeAnnotation(
-  const ARttiMethod: TRttiMethod): string;
-const
-  METHOD_DOC_STR_PATTERN = '%s.%s(%s)';
-var
-  LArgsStr: string;
-  LRttiParameter: TRttiParameter;
-begin
-  if (Length(ARttiMethod.GetParameters) = 0) then
-    Exit(String.Empty);
-
-  LArgsStr := String.Empty;
-  for LRttiParameter in ARttiMethod.GetParameters do begin
-    if not LArgsStr.IsEmpty then
-      LArgsStr := LArgsStr + ', ';
-
-    if not Assigned(LRttiParameter.ParamType) then
-      LArgsStr := LArgsStr + LRttiParameter.Name
-    else
-      LArgsStr := LArgsStr
-        + LRttiParameter.Name
-        + ': '
-        + TranslateType(LRttiParameter.ParamType);
-  end;
-
-  Result := String.Format(METHOD_DOC_STR_PATTERN, [
-    ARttiMethod.Parent.Name, ARttiMethod.Name, LArgsStr]);
-
-  if Assigned(ARttiMethod.ReturnType) then
-    Result := Result
-      + ' -> '
-      + TranslateType(ARttiMethod.ReturnType)
-  else
-    Result := Result + ' -> None';
-
-  if not Result.IsEmpty() then
-    Result := Result + #10;
-end;
-
-class function TExposedMemberDocStringsBuilder.GetFieldTypeAnnotation(
-  const ARttiField: TRttiField): string;
-const
-  FIELD_DOC_STR_PATTERN = '%s: ';
-begin
-  Result := Format(FIELD_DOC_STR_PATTERN, [
-    TranslateType(TRttiField(ARttiField).FieldType)]);
-end;
-
-class function TExposedMemberDocStringsBuilder.GetPropertyTypeAnnotation(
-  const ARttiProperty: TRttiProperty): string;
-const
-  PROPERTY_DOC_STR_PATTERN = '%s: ';
-begin
-  Result := Format(PROPERTY_DOC_STR_PATTERN, [
-    TranslateType(ARttiProperty.PropertyType)]);
-end;
-
-class function TExposedMemberDocStringsBuilder.GetIndexedPropertyTypeAnnotation(
-  const ARttiIndexedProperty: TRttiIndexedProperty): string;
-const
-  INDEXED_PROPERTY_DOC_STR_PATTERN = '%s: ';
-begin
-  Result := Format(INDEXED_PROPERTY_DOC_STR_PATTERN, [
-    TranslateType(ARttiIndexedProperty.PropertyType)]);
-end;
-
-class function TExposedMemberDocStringsBuilder.GetTypeAnnotation(
-  const ARttiMember: TRttiMember): string;
-begin
-  if ARttiMember.InheritsFrom(TRttiMethod) then
-    Result := GetMethodTypeAnnotation(TRttiMethod(ARttiMember))
-  else if ARttiMember.InheritsFrom(TRttiField) then
-    Result := GetFieldTypeAnnotation(TRttiField(ARttiMember))
-  else if ARttiMember.InheritsFrom(TRttiProperty) then
-    Result := GetPropertyTypeAnnotation(TRttiProperty(ARttiMember))
-  else if ARttiMember.InheritsFrom(TRttiIndexedProperty) then
-    Result := GetIndexedPropertyTypeAnnotation(TRttiIndexedProperty(ARttiMember))
-  else
-    Result := String.Empty;
-end;
-
-class function TExposedMemberDocStringsBuilder.GetDocStringFromDocServer(
-  const AParentInfo: PTypeInfo; const ARttiMember: TRttiMember): string;
-begin
-  if not Assigned(AParentInfo) then
-    Result := String.Empty
-  else
-    if not TPythonDocServer.Instance.ReadMemberDocStr(AParentInfo, ARttiMember, Result) then
-      if not Assigned(GetTypeData(AParentInfo)^.ParentInfo) then
-        Result := String.Empty
-      else
-        Result := GetDocStringFromDocServer(GetTypeData(AParentInfo)^.ParentInfo^, ARttiMember);
-end;
-
-class function TExposedMemberDocStringsBuilder.BuildDocs(const ADocString,
-  ATypeAnnotation: string): string;
-begin
-  //We only have the docstring
-  if ATypeAnnotation.IsEmpty() then
-    Result := ADocString
-  //We only have the type annotation
-  else if ADocString.IsEmpty() then
-    Result := ATypeAnnotation
-  //We have both values
-  else
-    Result := ATypeAnnotation + ADocString;
-end;
-
-class function TExposedMemberDocStringsBuilder.BuildDocs(
-  const ARttiMember: TRttiMember): string;
-begin
-  Result := BuildDocs(
-    GetDocStringFromDocServer(ARttiMember.Parent.Handle, ARttiMember),
-    GetTypeAnnotation(ARttiMember));
-end;
-{$IFDEF EXPOSE_MEMBERS}
-
-{ TExposedMethodImplementation }
-
-constructor TExposedMethodImplementation.Create(AOwner: TComponent;
-  const AName: string; const APyDelphiWrapper: TPyDelphiWrapper;
-  const APythonType: TPythonType; const ARttiType: TRttiType;
-  const AIsClassMethod, AIsStaticMethod: boolean);
-begin
-  FRttiType := ARttiType;
-  inherited Create(AOwner, AName, APyDelphiWrapper, APythonType);
-  FIsClassMethod := AIsClassMethod;
-  FIsStaticMethod := AIsStaticMethod;
-  FMethodHandler := function(const APyObject: PPyObject; const AObj1, AObj2: PPyObject): PPyObject
-    var
-      LTypeRef: Pointer;
+    if ASelf <> nil then
     begin
-      if IsDelphiObject(APyObject) then
-        LTypeRef := TPyDelphiObject(PythonToDelphi(APyObject)).DelphiObject
-      else if IsDelphiClass(APyObject) then
-        LTypeRef := TPyDelphiObjectClass(
-          PythonToPythonType(APyObject).PyObjectClass).DelphiObjectClass
-      else
-        Exit(nil);
-
-      Result := RttiCall(
-        LTypeRef,
-        Self.PythonType,
-        Self.PyDelphiWrapper,
-        String(Self.Name),
-        Self.FRttiType as TRttiStructuredType,
-        AObj1,
-        AObj2,
-        true);
-    end;
-end;
-
-destructor TExposedMethodImplementation.Destroy;
-begin
-  FImplementation.Free();
-  inherited;
-end;
-
-function TExposedMethodImplementation.GetDefaultDocString(): string;
-begin
-  Result := Format('<Delphi method %s of type %s at %x>', [
-    Name, FRttiType.Name, NativeInt(Self)]);
-end;
-
-function TExposedMethodImplementation.VirtualMethodImplementation(): pointer;
-var
-  LRttiCtx: TRttiContext;
-begin
-  Assert(not Assigned(FImplementation), 'Only one implementation per instance.');
-
-  LRttiCtx := TRttiContext.Create();
-  try
-    FImplementation := LRttiCtx.GetType(ClassInfo).GetMethod('Methods_Wrapper')
-      .CreateImplementation(Self,
-        procedure(UserData: Pointer; const Args: TArray<TValue>; out Result: TValue)
-        var
-          Self: TExposedMethodImplementation absolute UserData;
-        begin
-          if Assigned(Self.MethodHandler) then begin
-            TValue.Make<PPyObject>(
-              Self.MethodHandler(
-                Args[0].AsType<PPyObject>,
-                Args[1].AsType<PPyObject>,
-                Args[2].AsType<PPyObject>),
-              Result)
-          end else
-            TValue.Make<PPyObject>(PPyObject(nil), Result);
-        end);
-    Result := FImplementation.CodeAddress;
-  finally
-    LRttiCtx.Free;
-  end;
-end;
-
-class function TExposedMethodImplementation.Methods_Wrapper(const ASelf, AArgs, AKeyWords: PPyObject): PPyObject;
-begin
-  Result := nil;
-end;
-
-{ TExposedPropertyImplementation }
-
-constructor TExposedGetSetImplementation.Create(AOwner: TComponent;
-  const AName: string; const APyDelphiWrapper: TPyDelphiWrapper;
-  const APythonType: TPythonType; const ARttiType: TRttiType);
-begin
-  FRttiType := ARttiType;
-  inherited Create(AOwner, AName, APyDelphiWrapper, APythonType);
-  FGetHandler := function(const APyObject: TPyObject; const AContext: Pointer): PPyObject
-    var
-      LOutMsg: string;
-    begin
-      Result := GetRttiAttr(
-        TPyDelphiObject(APyObject).DelphiObject,
-        Self.FRttiType as TRttiStructuredType,
-        String(Self.Name),
-        Self.PyDelphiWrapper,
-        LOutMsg);
-
-      if not Assigned(Result) then
-        with GetPythonEngine() do
-          PyErr_SetObject (PyExc_AttributeError^,
-            PyUnicodeFromString(Format(rs_ErrAttrGet,[String(Self.Name), LOutMsg])));
-    end;
-  FSetHandler := function(const APyObject: TPyObject; const AArg: PPyObject; const AContext: Pointer): integer
-    var
-      LOutMsg: string;
-    begin
-      if SetRttiAttr(
-        TPyDelphiObject(APyObject).DelphiObject,
-        Self.FRttiType as TRttiStructuredType,
-        String(Self.Name),
-        AArg,
-        Self.PyDelphiWrapper,
-        LOutMsg) then
-          Result := 0
-        else begin
-          Result := 1;
-          with GetPythonEngine() do
-            PyErr_SetObject(PyExc_AttributeError^, PyUnicodeFromString(
-              Format(rs_ErrAttrSetr, [String(Self.Name), LOutMsg])))
-        end;
-    end;
-end;
-
-destructor TExposedGetSetImplementation.Destroy;
-begin
-  FGetImplementation.Free();
-  FSetImplementation.Free();
-  inherited;
-end;
-
-function TExposedGetSetImplementation.VirtualGetImplementation(): pointer;
-var
-  LRttiCtx: TRttiContext;
-begin
-  Assert(not Assigned(FGetImplementation), 'Only one implementation per instance.');
-
-  LRttiCtx := TRttiContext.Create();
-  try
-    FGetImplementation := LRttiCtx.GetType(ClassInfo).GetMethod('Get_Wrapper')
-      .CreateImplementation(Self,
-        procedure(UserData: Pointer; const Args: TArray<TValue>; out Result: TValue)
-        var
-          Self: TExposedGetSetImplementation absolute UserData;
-        begin
-          if Assigned(Self.GetHandler) then
-            TValue.Make<PPyObject>(
-              Self.GetHandler(
-                PythonToDelphi(Args[0].AsType<PPyObject>),
-                Args[1].AsType<Pointer>),
-              Result)
-          else
-            TValue.Make<PPyObject>(PPyObject(nil), Result);
-        end);
-    Result := FGetImplementation.CodeAddress;
-  finally
-    LRttiCtx.Free;
-  end;
-end;
-
-function TExposedGetSetImplementation.VirtualSetImplementation(): pointer;
-var
-  LRttiCtx: TRttiContext;
-begin
-  Assert(not Assigned(FSetImplementation), 'Only one implementation per instance.');
-
-  LRttiCtx := TRttiContext.Create();
-  try
-    FSetImplementation := LRttiCtx.GetType(ClassInfo).GetMethod('Set_Wrapper')
-      .CreateImplementation(Self,
-        procedure(UserData: Pointer; const Args: TArray<TValue>; out Result: TValue)
-        var
-          Self: TExposedGetSetImplementation absolute UserData;
-        begin
-          if Assigned(Self.SetHandler) then
-            TValue.Make<Integer>(
-              Self.SetHandler(
-                PythonToDelphi(Args[0].AsType<PPyObject>),
-                Args[1].AsType<PPyObject>,
-                Args[2].AsType<Pointer>),
-              Result)
-          else
-            TValue.Make<PPyObject>(PPyObject(nil), Result);
-        end);
-    Result := FSetImplementation.CodeAddress;
-  finally
-    LRttiCtx.Free;
-  end;
-end;
-
-class function TExposedGetSetImplementation.Get_Wrapper(const AObj: PPyObject;
-  const AContext : Pointer): PPyObject; cdecl;
-begin
-  Result := nil;
-end;
-
-class function TExposedGetSetImplementation.Set_Wrapper(const AObj,
-  AValue: PPyObject; const AContext: Pointer): integer; cdecl;
-begin
-  Result := 0;
-end;
-
-{ TExposedIndexedPropertyImplementation }
-
-constructor TExposedIndexedPropertyImplementation.Create(AOwner: TComponent;
-  const AName: string; const APyDelphiWrapper: TPyDelphiWrapper;
-  const APythonType: TPythonType; const ARttiType: TRttiType);
-begin
-  FRttiType := ARttiType;
-  inherited Create(AOwner, AName, APyDelphiWrapper, APythonType);
-  FIndexedPropertyHandler := function(const APyObject: TPyObject; const AContext: Pointer): PPyObject
-    var
-      LAccess: TIndexedPropertyAccess;
-      LMapping: TPyDelphiMapping;
-    begin
-      Result := PyDelphiWrapper.DefaultMappingType.CreateInstance;
-      LAccess := GetAccessClass().Create(
-        Self.PyDelphiWrapper, TPyDelphiObject(APyObject).DelphiObject);
-      LAccess.PropertyName := AName;
-      LAccess.ParentType := ARttiType;
-      LAccess.PythonType := APythonType;
-
-      LMapping := PythonToDelphi(Result) as TPyDelphiMapping;
-      LMapping.Setup(Self.PyDelphiWrapper, LAccess)
-    end;
-end;
-
-destructor TExposedIndexedPropertyImplementation.Destroy;
-begin
-  FImplementation.Free();
-  inherited;
-end;
-
-function TExposedIndexedPropertyImplementation.GetAccessClass: TIndexedPropertyAccessClass;
-begin
-  Result := TIndexedPropertyAccess;
-end;
-
-function TExposedIndexedPropertyImplementation.GetDefaultDocString: string;
-begin
-  Result := Format('<Delphi indexed property %s of type %s at %x>', [
-    Name, FRttiType.Name, NativeInt(Self)]);
-end;
-
-class function TExposedIndexedPropertyImplementation.IndexedProperty_Wrapper(
-  const AObj: PPyObject; const AContext : Pointer): PPyObject;
-begin
-  Result := nil;
-end;
-
-function TExposedIndexedPropertyImplementation.VirtualMethodImplementation: pointer;
-var
-  LRttiCtx: TRttiContext;
-begin
-  Assert(not Assigned(FImplementation), 'Only one implementation per instance.');
-
-  LRttiCtx := TRttiContext.Create();
-  try
-    FImplementation := LRttiCtx.GetType(ClassInfo).GetMethod('IndexedProperty_Wrapper')
-      .CreateImplementation(Self,
-        procedure(UserData: Pointer; const Args: TArray<TValue>; out Result: TValue)
-        var
-          Self: TExposedIndexedPropertyImplementation absolute UserData;
-        begin
-          if Assigned(Self.IndexedPropertyHandler) then
-            TValue.Make<PPyObject>(
-              Self.IndexedPropertyHandler(
-                PythonToDelphi(Args[0].AsType<PPyObject>),
-                Args[1].AsType<Pointer>),
-              Result)
-          else
-            TValue.Make<PPyObject>(PPyObject(nil), Result);
-        end);
-    Result := FImplementation.CodeAddress;
-  finally
-    LRttiCtx.Free;
-  end;
-end;
-
-{ TExposedIndexedPropertyImplementation.TIndexedPropertyAccess }
-
-class function TExposedIndexedPropertyImplementation.TIndexedPropertyAccess.ExpectedMappingClass: TClass;
-begin
-  Result := TObject;
-end;
-
-class function TExposedIndexedPropertyImplementation.TIndexedPropertyAccess.SupportsWrite: Boolean;
-begin
-  Result := true;
-end;
-
-class function TExposedIndexedPropertyImplementation.TIndexedPropertyAccess.Name: string;
-begin
-  Result := 'Indexed property';
-end;
-
-function TExposedIndexedPropertyImplementation.TIndexedPropertyAccess.GetSize: Integer;
-begin
-  Result := High(Integer);
-end;
-
-function TExposedIndexedPropertyImplementation.TIndexedPropertyAccess.GetItem(
-  const AIndexes: PPyObject): PPyObject;
-var
-  LProperty: TRttiIndexedProperty;
-  LArgCount: NativeInt;
-  LIndexes: PPyObject;
-begin
-  LProperty := FParentType.GetIndexedProperty(FPropertyName);
-
-  if GetPythonEngine().PyTuple_Check(AIndexes) then begin
-    LArgCount := PythonType.Engine.PyTuple_Size(AIndexes);
-    if LArgCount = 0 then
+      InvalidArguments(string(FName), rs_ExpectedNil);
       Exit(nil);
-
-    Result := RttiCall(
-      Mapping,
-      Self.PythonType,
-      Self.Wrapper,
-      LProperty.ReadMethod.Name,
-      Self.ParentType as TRttiStructuredType,
-      AIndexes,
-      nil,
-      true);
-  end else begin
-    LIndexes := GetPythonEngine().PyTuple_New(1);
-    try
-      GetPythonEngine().PyTuple_SetItem(LIndexes, 0, AIndexes);
-      Result := RttiCall(
-        Mapping,
-        Self.PythonType,
-        Self.Wrapper,
-        LProperty.ReadMethod.Name,
-        Self.ParentType as TRttiStructuredType,
-        LIndexes,
-        nil,
-        true);
-    finally
-      GetPythonEngine().Py_DecRef(LIndexes);
+    end
+    else
+      ParentAddress := nil;
+  end
+  else if RttiMethod.IsClassMethod then
+  begin
+    // Class methods can be called from both instances and class references
+    if IsDelphiObject(ASelf) then
+      ParentAddress := TPyDelphiObject(PythonToDelphi(ASelf)).DelphiObject.ClassType
+    else
+    begin
+      RefClass := (RttiMethod.Parent as TRttiInstanceType).MetaclassType;
+      if ValidateClassRef(ASelf, RefClass, ClassRef, ErrMsg) then
+        ParentAddress := ClassRef
+      else
+      begin
+        InvalidArguments(string(FName), rs_ExpectedClass);
+        Exit(nil);
+      end;
+    end;
+  end
+  else
+  begin
+    if IsDelphiObject(ASelf) then
+      ParentAddress := TPyDelphiObject(PythonToDelphi(ASelf)).DelphiObject
+    else
+    begin
+      InvalidArguments(string(FName), rs_ExpectedObject);
+      Exit(nil);
     end;
   end;
+
+  // TODO: Optimize out the method search in RttiCall, by passing the
+  // RttiMethod directly to an overload of Rtti, when the method
+  // is not overloaded
+
+  Result := RttiCall(
+    ParentAddress,
+    FPyDelphiWrapper,
+    string(FName),
+    FParentRtti,
+    Args,
+    Kwds,
+    RttiMethod.IsStatic or RttiMethod.IsClassMethod);
 end;
 
-function TExposedIndexedPropertyImplementation.TIndexedPropertyAccess.SetItem(
-  const AIndexes: PPyObject; const AValue: PPyObject): Boolean;
+{ TExposedGetSet }
+
+destructor TExposedGetSet.Destroy;
+begin
+  if FGetterCallback <> nil then
+    DeleteCallback(FGetterCallback);
+  if FSetterCallback <> nil then
+    DeleteCallback(FSetterCallback);
+  inherited;
+end;
+
+function TExposedGetSet.GetGetterCallback: Pointer;
 var
-  LProperty: TRttiIndexedProperty;
-  LArgCount: NativeInt;
-  I: integer;
-  LIndexes: PPyObject;
+  Method: function (AObj: PPyObject; AContext : Pointer): PPyObject of object; cdecl;
 begin
-  LProperty := FParentType.GetIndexedProperty(FPropertyName);
+  if FGetterCallback = nil then
+  begin
+    Method := GetterWrapper;
+    FGetterCallback := GetOfObjectCallBack(TCallBack(Method), 2, DEFAULT_CALLBACK_TYPE);
+  end;
+  Result := FGetterCallback;
+end;
 
-  if GetPythonEngine().PyTuple_Check(AIndexes) then begin
-    LArgCount := PythonType.Engine.PyTuple_Size(AIndexes);
-    LIndexes := GetPythonEngine().PyTuple_New(LArgCount + 1);
-    try
-      for I := 0 to LArgCount - 1 do
-        GetPythonEngine().PyTuple_SetItem(
-          LIndexes, I, GetPythonEngine().PyTuple_GetItem(AIndexes, I));
+function TExposedGetSet.GetSetterCallback: Pointer;
+var
+  Method: function(AObj, AValue: PPyObject; AContext: Pointer): Integer of object; cdecl;
+begin
+  if FSetterCallback = nil then
+  begin
+    Method := SetterWrapper;
+    FSetterCallback := GetOfObjectCallBack(TCallBack(Method), 3, DEFAULT_CALLBACK_TYPE);
+  end;
+  Result := FSetterCallback;
+end;
 
-      GetPythonEngine().PyTuple_SetItem(LIndexes, LArgCount, AValue);
-      RttiCall(
-        Mapping,
-        Self.PythonType,
-        Self.Wrapper,
-        LProperty.WriteMethod.Name,
-        Self.ParentType as TRttiStructuredType,
-        LIndexes,
-        nil,
-        true);
-    finally
-      GetPythonEngine().Py_DecRef(LIndexes);
-    end;
-  end else begin
-    LIndexes := GetPythonEngine().PyTuple_New(2);
+function TExposedGetSet.GetterWrapper(AObj: PPyObject; AContext : Pointer): PPyObject; cdecl;
+var
+  Obj: TObject;
+  LOutMsg: string;
+begin
+  Result := nil;
+  if ValidateClassProperty(AObj, FParentRtti.Handle, Obj, LOutMsg) then
+  begin
+    if FRttiMember is TRttiProperty then
+      Result := GetRttiProperty(Obj, TRttiProperty(FRttiMember), FPyDelphiWrapper, LOutMsg)
+    else if FRttiMember is TRttiField then
+      Result := GetRttiField(Obj, TRttiField(FRttiMember), FPyDelphiWrapper, LOutMsg);
+  end;
+
+  if not Assigned(Result) then
+    with GetPythonEngine do
+      PyErr_SetObject (PyExc_AttributeError^,
+        PyUnicodeFromString(Format(rs_ErrAttrGet, [FRttiMember.Name, LOutMsg])));
+end;
+
+function TExposedGetSet.SetterWrapper(AObj, AValue: PPyObject; AContext: Pointer): Integer; cdecl;
+var
+  Obj: TObject;
+  ErrMsg: string;
+begin
+  Result := -1;
+  if ValidateClassProperty(AObj, FParentRtti.Handle, Obj, ErrMsg) then
+  begin
+    if ((FRttiMember is TRttiProperty) and SetRttiProperty(Obj,
+      TRttiProperty(FRttiMember), AValue, FPyDelphiWrapper, ErrMsg)) or
+      ((FRttiMember is TRttiField) and SetRttiField(Obj,
+      TRttiField(FRttiMember), AValue, FPyDelphiWrapper, ErrMsg))
+    then
+      Result := 0
+  end;
+
+  if Result <> 0 then
+    with GetPythonEngine do
+      PyErr_SetObject (PyExc_AttributeError^,
+        PyUnicodeFromString(Format(rs_ErrAttrSetr, [FRttiMember.Name, ErrMsg])));
+end;
+
+{ TExposedField }
+
+function TExposedField.GetDefaultDocString: string;
+var
+  FieldType: string;
+begin
+  if Assigned((FRttiMember as TRttiField).FieldType) then
+    FieldType := TRttiField(FRttiMember).FieldType.Name;
+
+  Result := Format('<Field %s.%s of type %s>', [
+    FParentRtti.Name, FRttiMember.Name, FieldType]);
+end;
+
+{ TExposedProperty }
+
+function TExposedProperty.GetDefaultDocString: string;
+var
+  PropertyType: string;
+begin
+  if Assigned((FRttiMember as TRttiProperty).PropertyType) then
+    PropertyType := TRttiProperty(FRttiMember).PropertyType.Name;
+
+  Result := Format('<Property %s.%s of type %s>', [
+    FParentRtti.Name, FRttiMember.Name, PropertyType]);
+end;
+
+{ TExposedEvent }
+
+function TExposedEvent.GetDefaultDocString(): string;
+begin
+  Result := Format('<Event property %s.%s>', [FParentRtti.Name, FRttiMember.Name])
+    + #10 +(FRttiMember as TRttiProperty).PropertyType.ToString;
+end;
+
+function TExposedEvent.GetterWrapper(AObj: PPyObject; AContext : Pointer): PPyObject;
+var
+  Obj: TObject;
+  RttiProp: TRttiInstanceProperty;
+  LOutMsg: string;
+begin
+  RttiProp := FRttiMember as TRttiInstanceProperty;
+  if ValidateClassProperty(AObj, FParentRtti.Handle, Obj, LOutMsg) then
+    Result := FPyDelphiWrapper.EventHandlers.GetCallable(Obj, RttiProp.PropInfo)
+  else
+    Result := FPyDelphiWrapper.Engine.ReturnNone;
+end;
+
+function TExposedEvent.SetterWrapper(AObj, AValue: PPyObject; AContext: Pointer): Integer;
+var
+  Obj: TObject;
+  RttiProp: TRttiInstanceProperty;
+  ErrMsg: string;
+  EventHandler: TRttiEventHandler;
+  Method: TMethod;
+begin
+  Result := -1;
+  if not CheckCallableAttribute(AValue, FRttiMember.Name) then
+    Exit;
+
+  if ValidateClassProperty(AObj, FParentRtti.Handle, Obj, ErrMsg) then
+  begin
     try
-      GetPythonEngine().PyTuple_SetItem(LIndexes, 0, AIndexes);
-      GetPythonEngine().PyTuple_SetItem(LIndexes, 1, AValue);
-      RttiCall(
-        Mapping,
-        Self.PythonType,
-        Self.Wrapper,
-        LProperty.WriteMethod.Name,
-        Self.ParentType as TRttiStructuredType,
-        LIndexes,
-        nil,
-        true);
-    finally
-      GetPythonEngine().Py_DecRef(LIndexes);
+      RttiProp := FRttiMember as TRttiInstanceProperty;
+
+      // Remove handler if it exists
+      fPyDelphiWrapper.EventHandlers.Unlink(Obj, RttiProp.PropInfo);
+
+      if AValue = GetPythonEngine.Py_None then
+      begin
+        Method.Code := nil;
+        Method.Data := nil;
+      end
+      else
+      begin
+        EventHandler := TRttiEventHandler.Create(FPyDelphiWrapper, Obj,
+          RttiProp.PropInfo, AValue, RttiProp.PropertyType as TRttiMethodType);
+
+        FPyDelphiWrapper.EventHandlers.Add(EventHandler);
+
+        Method.Code := EventHandler.CodeAddress;
+        Method.Data := EventHandler;
+      end;
+      SetMethodProp(Obj, RttiProp.PropInfo, Method);
+
+      Result := 0;
+    except
+      ErrMsg := rs_ErrUnexpected;
     end;
   end;
 
-  Result := GetPythonEngine().PyErr_Occurred() = nil;
+  if Result <> 0 then
+    with GetPythonEngine do
+      PyErr_SetObject (PyExc_AttributeError^,
+        PyUnicodeFromString(Format(rs_ErrAttrSetr, [FRttiMember.Name, ErrMsg])));
 end;
 
-function TExposedIndexedPropertyImplementation.TIndexedPropertyAccess.DelItem(
-  const AIndexes: PPyObject): boolean;
+{ TExposedIndexedProperty }
+function TExposedIndexedProperty.GetDefaultDocString(): string;
+var
+  PropertyType: string;
 begin
-  Result := false;
+  if Assigned((FRttiMember as TRttiIndexedProperty).PropertyType) then
+    PropertyType := TRttiIndexedProperty(FRttiMember).PropertyType.Name;
+
+  Result := Format('<Indexed property %s.%s of type %s>', [
+    FParentRtti.Name, FRttiMember.Name, PropertyType]);
 end;
 
-{ TExposedIndexedPropertyImplementation.TIndexedPropertyAccess }
-
-class function TExposedIndexedPropertyImplementation.TIndexedPropertyReadOnlyAccess.SupportsWrite: Boolean;
+function TExposedIndexedProperty.GetterWrapper(AObj: PPyObject; AContext : Pointer): PPyObject;
+var
+  HelperType: TPythonType;
 begin
-  Result := false;
+   HelperType := FPyDelphiWrapper.GetHelperType('IndexedPropertyType');
+   Assert(HelperType <> nil);
+
+   Result := HelperType.CreateInstance;
+   (PythonToDelphi(Result) as TPyIndexedProperty).Setup(AObj, FPyDelphiWrapper,
+     FRttiMember as TRttiIndexedProperty);
 end;
 
-{ TExposedIndexedPropertyReadOnlyImplementation }
+{ TPyIndexedProperty }
 
-function TExposedIndexedPropertyReadOnlyImplementation.GetAccessClass: TExposedIndexedPropertyImplementation.TIndexedPropertyAccessClass;
+destructor TPyIndexedProperty.Destroy;
 begin
-  Result := TIndexedPropertyReadOnlyAccess;
+  if Assigned(FPyWrapper) then
+    FPyWrapper.Engine.Py_XDECREF(FPyObj);
+  inherited;
 end;
 
-{ TExposedFieldImplementation }
-
-function TExposedFieldImplementation.GetDefaultDocString(): string;
+procedure TPyIndexedProperty.Setup(PyObj: PPyObject; Wrapper: TPyDelphiWrapper; Prop: TRttiIndexedProperty);
 begin
-  Result := Format('<Delphi field %s of type %s at %x>', [
-    Name, FRttiType.Name, NativeInt(Self)]);
+  FPyObj:= PyObj;
+  Wrapper.Engine.Py_XINCREF(FPyObj);
+  FPyWrapper := Wrapper;
+  FProperty := Prop;
 end;
 
-{ TExposedPropertyImplementation }
-
-function TExposedPropertyImplementation.GetDefaultDocString(): string;
+class procedure TPyIndexedProperty.SetupType(PythonType : TPythonType);
 begin
-  Result := Format('<Delphi property %s of type %s at %x>', [
-    Name, FRttiType.Name, NativeInt(Self)]);
+  inherited;
+  PythonType.Name := 'IndexedPropertyType';
+  PythonType.TypeName := 'IndexedProperty';
+  PythonType.GenerateCreateFunction := False;
+  PythonType.DocString.Text := 'Indexed property wrapper';
+  PythonType.Services.Basic := [bsRepr, bsStr];
+
+  PythonType.Services.Mapping := [msSubscript, msAssSubscript]
 end;
-{$ENDIF EXPOSE_MEMBERS}
+
+function TPyIndexedProperty.MpSubscript(obj: PPyObject) : PPyObject;
+var
+  PyArgs: PPyObject;
+  PascalObject: TObject;
+  ErrMsg: string;
+begin
+  if not ValidateClassProperty(FPyObj, FProperty.Parent.Handle, PascalObject, ErrMsg) then
+  begin
+    InvalidArguments(FProperty.Name, ErrMsg);
+    Exit(nil);
+  end;
+
+  // obj is a tuple only if we have more than one arguments
+  if FPyWrapper.Engine.PyTuple_Check(obj) then
+    PyArgs := obj
+  else
+    PyArgs := FPyWrapper.Engine.MakePyTuple([obj]);
+
+  Result := RttiCall(PascalObject, FPyWrapper, FProperty.ReadMethod,
+    PyArgs, nil);
+
+  if not FPyWrapper.Engine.PyTuple_Check(obj) then
+    FPyWrapper.Engine.Py_DECREF(PyArgs); // release created tuple
+end;
+
+function TPyIndexedProperty.MpAssSubscript(obj1, obj2: PPyObject) : Integer;
+var
+  Engine: TPythonEngine;
+  PyArgs: PPyObject;
+  PascalObject: TObject;
+  TempPy: PPyObject;
+  Count, Index: Integer;
+  ErrMsg: string;
+begin
+  Result := -1; // Signals failure
+
+  Engine := FPyWrapper.Engine;
+  if not FProperty.IsWritable then
+  begin
+    with Engine do
+      PyErr_SetObject(PyExc_TypeError^, PyUnicodeFromString(rs_NotWritable));
+    Exit;
+  end;
+
+  if not ValidateClassProperty(FPyObj, FProperty.Parent.Handle, PascalObject, ErrMsg) then
+  begin
+    InvalidArguments(FProperty.Name, ErrMsg);
+    Exit;
+  end;
+
+  // obj is a tuple only if we have more than one arguments
+  if Engine.PyTuple_Check(obj1) then
+  begin
+    Count := Engine.PyTuple_Size(obj1);
+    PyArgs := Engine.PyTuple_New(Count + 1);
+    for Index := 0 to Count - 1 do
+    begin
+      TempPy := Engine.PyTuple_GetItem(obj1, Index);
+      Engine.Py_XINCREF(TempPy);
+      Engine.PyTuple_SetItem(PyArgs, Index, TempPy);
+    end;
+    Engine.Py_XINCREF(obj2);
+    Engine.PyTuple_SetItem(PyArgs, Count, obj2);
+  end
+  else
+    PyArgs := Engine.MakePyTuple([obj1, obj2]);
+
+  TempPy := RttiCall(PascalObject, FPyWrapper, FProperty.WriteMethod,
+    PyArgs, nil);
+
+  Engine.Py_DECREF(PyArgs);  // release created tuple
+
+  if TempPy <> nil then
+  begin
+    Engine.Py_DECREF(TempPy);  //Should be Py_None
+    Result := 0; // Signal success
+  end;
+end;
+
+{ TRttiEventHandler }
+constructor TRttiEventHandler.Create(PyDelphiWrapper: TPyDelphiWrapper;
+  Component: TObject; PropertyInfo: PPropInfo; Callable: PPyObject;
+  AMethodType: TRttiMethodType);
+begin
+  inherited Create(PyDelphiWrapper, Component, PropertyInfo, Callable);
+  MethodType := AMethodType;
+  FMethodImplementation := AMethodType.CreateImplementation(nil, ImplCallback);
+end;
+
+destructor TRttiEventHandler.Destroy;
+begin
+  FMethodImplementation.Free;
+  inherited;
+end;
+
+function TRttiEventHandler.CodeAddress: Pointer;
+begin
+  if Assigned(FMethodImplementation) then
+    Result := FMethodImplementation.CodeAddress
+  else
+    Result := nil;
+end;
+
+class procedure TRttiEventHandler.ImplCallback(UserData: Pointer;
+  const Args: TArray<TValue>; out Result: TValue);
+var
+  EventHandler: TRttiEventHandler;
+  Params: TArray<TRttiParameter>;
+  PyArgs: PPyObject;
+  PyResult: PPyObject;
+  TempPy: PPyObject;
+  Index: Integer;
+  Engine: TPythonEngine;
+  ErrMsg: string;
+begin
+  EventHandler := Args[0].AsObject as TRttiEventHandler;
+  Params := EventHandler.MethodType.GetParameters;
+
+  if Length(Args) <> Length(Params) + 1 then  // +1 for Self
+  begin
+    InvalidArguments(string(EventHandler.PropertyInfo.Name), rs_IncompatibleArguments);
+    Exit;
+  end;
+
+  Engine := EventHandler.PyDelphiWrapper.Engine;
+
+  // Set up the python arguments
+  PyArgs := Engine.PyTuple_New(Length(Args) - 1);  //Ignore Self
+  try
+    for Index := 1 to Length(Args) - 1 do
+    begin
+      if Params[Index - 1].Flags * [TParamFlag.pfVar, TParamFlag.pfOut] <> [] then
+        TempPy := CreateVarParam(EventHandler.PyDelphiWrapper, Args[Index])
+      else
+        TempPy := TValueToPyObject(Args[Index], EventHandler.PyDelphiWrapper, ErrMsg);
+      if TempPy <> nil then
+        Engine.PyTuple_SetItem(PyArgs, Index - 1, TempPy)
+      else
+      begin
+        InvalidArguments(string(EventHandler.PropertyInfo.Name), rs_IncompatibleArguments);
+        Engine.CheckError;  // will raise an Exception
+      end;
+    end;
+
+    // Make the call
+    PyResult := Engine.PyObject_CallObject(EventHandler.Callable, PyArgs);
+
+    // deal with var/out parameters
+    for Index := 1 to Length(Args) - 1 do
+      if Params[Index - 1].Flags * [TParamFlag.pfVar, TParamFlag.pfOut] <> [] then
+      begin
+        TempPy := Engine.PyTuple_GetItem(PyArgs, Index - 1);
+
+        if not PyObjectToTValue((PythonToDelphi(TempPy) as TPyDelphiVarParameter).Value,
+          Params[Index- 1].ParamType, Args[Index], ErrMsg) then
+        begin
+          InvalidArguments(string(EventHandler.PropertyInfo.Name), rs_IncompatibleArguments);
+          Engine.CheckError;  // will raise an Exception
+        end;
+      end;
+
+    if Assigned(PyResult) and (EventHandler.MethodType.ReturnType <> nil) and
+      not PyObjectToTValue(PyResult, EventHandler.MethodType.ReturnType, Result, ErrMsg)
+    then
+      Engine.PyErr_SetObject(Engine.PyExc_TypeError^, Engine.PyUnicodeFromString(
+        Format(rs_ErrInvalidRet, [string(EventHandler.PropertyInfo.Name), ErrMsg])));
+    Engine.Py_XDECREF(PyResult);
+  finally
+    Engine.Py_XDECREF(PyArgs);
+  end;
+  Engine.CheckError;
+end;
+
+{$ENDIF EXTENDED_RTTI}
 
 function RegisteredUnits : TRegisteredUnits;
 begin
@@ -1933,6 +1859,51 @@ begin
 end;
 
 { Helper functions }
+
+procedure InvalidArguments(const MethName, ErrMsg : string);
+begin
+  with GetPythonEngine do
+    PyErr_SetObject(PyExc_TypeError^, PyUnicodeFromString(
+      Format(rs_ErrInvalidArgs,
+      [MethName, ErrMsg])));
+end;
+
+function ValidateClassRef(PyValue: PPyObject; RefClass: TClass;
+  out ClassRef: TClass; out ErrMsg: string): Boolean;
+var
+  LPythonType: TPythonType;
+begin
+  ClassRef := nil;
+  if (PyValue = GetPythonEngine.Py_None) then begin
+    Result := True;
+    Exit;
+  end;
+
+  Result := False;
+  // Is PyValue a Python type?
+  if not GetPythonEngine.PyClass_Check(PyValue) then
+  begin
+    ErrMsg := rs_ExpectedClass;
+    Exit;
+  end;
+
+  LPythonType := FindPythonType(PPyTypeObject(PyValue));
+  if Assigned(LPythonType) then
+  begin
+    if Assigned(LPythonType) and LPythonType.PyObjectClass.InheritsFrom(TPyDelphiObject) then
+    begin
+      ClassRef := TPyDelphiObjectClass(LPythonType.PyObjectClass).DelphiObjectClass;
+      if ClassRef.InheritsFrom(RefClass) then
+        Result := True
+      else
+        ErrMsg := rs_IncompatibleClasses;
+    end
+    else
+      ErrMsg := rs_ExpectedClass;
+  end
+  else
+    ErrMsg := rs_ExpectedClass;
+end;
 
 {$IFDEF EXTENDED_RTTI}
 function DynArrayToPython(const Value: TValue): PPyObject;
@@ -2120,46 +2091,151 @@ begin
     ErrMsg := rs_ExpectedInterface;
 end;
 
-function ValidateClassRef(PyValue: PPyObject; TypeInfo: PTypeInfo;
-  out ClassRef: TClass; out ErrMsg: string): Boolean;
+function ValidateDynArray(PyValue: PPyObject; const RttiType: TRttiType;
+  out ParamValue: TValue; out ErrMsg: string): Boolean;
 var
-  LTypeName: AnsiString;
-  LPythonType: TPythonType;
+  Arr: array of TValue;
+  I: Integer;
+  elType: PPTypeInfo;
+  V: Variant;
+  Num: Int64;
+  PyEngine: TPythonEngine;
 begin
-  ClassRef := nil;
-  if (PyValue = GetPythonEngine.Py_None) then begin
-     Result := True;
-     Exit;
-  end;
-
   Result := False;
-  // Is PyValue a Python type?
-  if PyValue^.ob_type^.tp_name = 'type' then
-    LTypeName := PPyTypeObject(PyValue).tp_name
-  else
+  PyEngine := GetPythonEngine;
+
+  if not PyEngine.PySequence_Check(PyValue) = 0 then
   begin
-    ErrMsg := rs_ExpectedClass;
+    ErrMsg := rs_ExpectedSequence;
     Exit;
   end;
 
-  LPythonType := GetPythonEngine.FindPythonType(LTypeName);
-  if Assigned(LPythonType) then
-  begin
-    if Assigned(LPythonType) and LPythonType.PyObjectClass.InheritsFrom(TPyDelphiObject) then
+  if (RttiType = nil) or (RttiType.Handle = nil) or (GetTypeData(RttiType.Handle) = nil) then
+    Exit;
+  elType := GetTypeData(RttiType.Handle).elType;
+  if elType = nil then
+    elType := GetTypeData(RttiType.Handle).elType2;
+  if elType = nil then
+    Exit;
+
+  try
+    SetLength(Arr, PyEngine.PySequence_Length(PyValue));
+    for I := 0 to PyEngine.PySequence_Length(PyValue) - 1 do
     begin
-      ClassRef := TPyDelphiObjectClass(LPythonType.PyObjectClass).DelphiObjectClass;
-      TypeInfo := GetTypeData(TypeInfo)^.InstanceType^;
-      if Assigned(TypeInfo) and (ClassRef.InheritsFrom(GetTypeData(TypeInfo)^.ClassType)) then
-        Result := True
+      V := PyEngine.GetSequenceItem(PyValue, i);
+      if elType^.Kind = tkEnumeration then
+      begin
+        Num := TValue.FromVariant(V).Cast(TypeInfo(Int64)).AsInt64;
+        Arr[i] := TValue.FromOrdinal(elType^, Num);
+      end
       else
-        ErrMsg := rs_IncompatibleClasses;
-    end
-    else
-      ErrMsg := rs_ExpectedClass;
-  end
-  else
-    ErrMsg := rs_ExpectedClass;
+        Arr[i] := TValue.FromVariant(V).Cast(elType^);
+    end;
+    ParamValue := TValue.FromArray(RttiType.Handle, Arr);
+    Result := True;
+  except
+    ErrMsg := rs_IncompatiblePythonType;
+  end;
 end;
+
+function PyObjectToTValue(PyArg : PPyObject; ArgType: TRttiType;
+  out Arg: TValue; out ErrMsg: string): Boolean;
+var
+  Obj: TObject;
+  ClassRef: TClass;
+begin
+  if ArgType = nil then
+    Exit(False);
+
+  case ArgType.TypeKind of
+    tkClass:
+      begin
+        Result := ValidateClassProperty(PyArg, ArgType.Handle, Obj, ErrMsg);
+        if Result then
+          Arg := Obj;
+      end;
+    tkClassRef:
+      begin
+        Result := ValidateClassRef(PyArg,
+          (ArgType as TRttiClassRefType).MetaclassType, ClassRef, ErrMsg);
+        if Result then
+          Arg := ClassRef;
+      end;
+    tkInterface:
+      Result :=  ValidateInterfaceProperty(PyArg,
+        ArgType as TRttiInterfaceType, Arg, ErrMsg);
+    tkRecord{$IFDEF MANAGED_RECORD}, tkMRecord{$ENDIF}:
+      Result := ValidateRecordProperty(PyArg, ArgType.Handle, Arg, ErrMsg);
+    tkDynArray:
+      Result := ValidateDynArray(PyArg, ArgType, Arg, ErrMsg)
+  else
+    Result := SimplePythonToValue(PyArg, ArgType.Handle, Arg, ErrMsg);
+  end;
+end;
+
+
+function PyArgsToValues(PyArgs: PPyObject; Method: TRttiMethod;
+  out Args: array of TValue; out VarParamIndices: TArray<Integer>): Boolean;
+var
+  Index: Integer;
+  PyArg : PPyObject;
+  Param: TRttiParameter;
+  Engine: TPythonEngine;
+  ErrMsg: string;
+  Params : TArray<TRttiParameter>;
+begin
+  Params := Method.GetParameters;
+  if Length(Args) <> Length(Params) then
+    Exit(False);
+
+  VarParamIndices := [];
+  Engine := GetPythonEngine;
+  for Index := 0 to Length(Params) - 1 do
+  begin
+    Param := Params[Index];
+    PyArg := Engine.PyTuple_GetItem(PyArgs, Index);
+    if not PyObjectToTValue(PyArg, Param.ParamType, Args[Index], ErrMsg) then
+      Exit(False);
+    if (Param.Flags * [TParamFlag.pfVar, TParamFlag.pfOut] <> []) then
+      VarParamIndices := VarParamIndices + [Index];
+  end;
+  Result := True;
+end;
+
+function TValueToPyObject(const Value: TValue;
+   DelphiWrapper: TPyDelphiWrapper; out ErrMsg: string): PPyObject;
+begin
+  if Value.IsEmpty then
+    Result := GetPythonEngine.ReturnNone
+  else
+    case Value.Kind of
+      tkClass: Result := DelphiWrapper.Wrap(Value.AsObject);
+      tkClassRef: Result := DelphiWrapper.WrapClass(Value.AsClass);
+      tkInterface: Result := DelphiWrapper.WrapInterface(Value);
+      tkRecord{$IFDEF MANAGED_RECORD},tkMRecord{$ENDIF}:
+        Result := DelphiWrapper.WrapRecord(Value);
+    else
+      Result := SimpleValueToPython(Value, ErrMsg);
+    end;
+end;
+
+function  CreateVarParam(PyDelphiWrapper : TPyDelphiWrapper;
+  const AValue: TValue) : PPyObject;
+var
+  tmp : PPyObject;
+  _varParam : TPyDelphiVarParameter;
+  ErrMsg: string;
+begin
+  tmp := TValueToPyObject(AValue, PyDelphiWrapper, ErrMsg);
+  if tmp = nil then
+    Exit(nil);
+
+  Result := PyDelphiWrapper.VarParamType.CreateInstance;
+  _varParam := PythonToDelphi(Result) as TPyDelphiVarParameter;
+  _varParam.Value := tmp; // refcount was incremented
+  GetPythonEngine.Py_DECREF(tmp);
+end;
+
 {$ENDIF}
 
 function ValidateClassProperty(PyValue: PPyObject; TypeInfo: PTypeInfo;
@@ -2344,7 +2420,7 @@ begin
   GetPythonEngine.Py_DECREF(tmp);
 end;
 
-function CreateVarParam(const PyDelphiWrapper: TPyDelphiWrapper; const AClass: TClass): PPyObject; overload;
+function CreateVarParam(PyDelphiWrapper: TPyDelphiWrapper; AClass: TClass): PPyObject; overload;
 var
   LTmp: PPyObject;
 begin
@@ -2743,108 +2819,6 @@ begin
   PythonType.Services.Basic := [bsRepr, bsStr, bsIter, bsIterNext];
 end;
 
-{ TMappingAccess }
-
-constructor TMappingAccess.Create(const AWrapper: TPyDelphiWrapper;
-  const AMapping: TObject);
-begin
-  inherited Create;
-  Assert(Assigned(AWrapper));
-  Assert(Assigned(AMapping));
-  Assert(
-    AMapping.InheritsFrom(ExpectedMappingClass),
-    Format('Class %s expects a mapping of class %s', [
-      ClassName, ExpectedMappingClass.ClassName]));
-  FWrapper := AWrapper;
-  FMapping := AMapping;
-end;
-
-function TMappingAccess.Clone: TMappingAccess;
-begin
-  Result := TMappingAccessClass(ClassType).Create(Wrapper, Mapping);
-end;
-
-class function TMappingAccess.Name: string;
-begin
-  Result := ExpectedMappingClass.ClassName;
-end;
-
-class function TMappingAccess.SupportsWrite: boolean;
-begin
-  Result := false;
-end;
-
-function TMappingAccess.Wrap(const AObj: TObject;
-  const AOwnership: TObjectOwnership): PPyObject;
-begin
-  Result := Wrapper.Wrap(AObj, AOwnership);
-end;
-
-{ TPyDelphiMapping }
-
-destructor TPyDelphiMapping.Destroy;
-begin
-  FMappingAccess.Free;
-  inherited;
-end;
-
-class procedure TPyDelphiMapping.SetupType(PythonType: TPythonType);
-begin
-  inherited;
-  PythonType.Name := 'DefaultMappingType';
-  PythonType.TypeName := 'DelphiDefaultMapping';
-  PythonType.GenerateCreateFunction := False;
-  PythonType.DocString.Text := 'Abstract Mapping type for Delphi';
-  PythonType.Services.Mapping := [msLength, msSubscript, msAssSubscript];
-end;
-
-procedure TPyDelphiMapping.Setup(const APyDelphiWrapper: TPyDelphiWrapper;
-  const AMappingAccess: TMappingAccess);
-begin
-  Assert(Assigned(APyDelphiWrapper));
-  Assert(Assigned(AMappingAccess));
-  FPyDelphiWrapper := APyDelphiWrapper;
-  FMappingAccess := AMappingAccess;
-end;
-
-function TPyDelphiMapping.Repr: PPyObject;
-begin
-  with GetPythonEngine() do
-    Result := PyUnicodeFromString(
-      Format('<Delphi %s at %x>', [MappingAccess.Name, NativeInt(Self)]));
-end;
-
-function TPyDelphiMapping.MpLength: NativeInt;
-begin
-  Result := MappingAccess.GetSize();
-end;
-
-function TPyDelphiMapping.MpSubscript(obj: PPyObject): PPyObject;
-begin
-  Result := MappingAccess.GetItem(obj);
-end;
-
-function TPyDelphiMapping.MpAssSubscript(obj1, obj2: PPyObject): Integer;
-begin
-  if not MappingAccess.SupportsWrite then begin
-    with GetPythonEngine() do
-      PyErr_SetObject(PyExc_SystemError^,
-        PyUnicodeFromString(Format(rs_ErrMpAssSubscript, [MappingAccess.Name])));
-      Exit(-1);
-  end;
-
-  if Assigned(obj2) then begin
-    if MappingAccess.SetItem(obj1, obj2) then
-      Result := 0
-    else
-      Result := -1;
-  end else
-    if MappingAccess.DelItem(obj1) then
-      Result := 0
-    else
-      Result := -1;
-end;
-
 { TPyInterfacedObject }
 
 function TPyInterfacedObject._AddRef: Integer;
@@ -2894,8 +2868,18 @@ end;
 constructor TPyDelphiObject.Create(APythonType: TPythonType);
 begin
   inherited;
+  // PyObjects created by python should be owned by python.
+  // PyObjects created by wrapping pascal object be default are not
+  Owned := True;
   if Assigned(APythonType) and (APythonType.Owner is TPyDelphiWrapper) then
     PyDelphiWrapper := TPyDelphiWrapper(APythonType.Owner);
+end;
+
+constructor TPyDelphiObject.CreateWith(APythonType: TPythonType; args, kwds: PPyObject);
+begin
+    with APythonType.Engine do
+      PyErr_SetObject(PyExc_TypeError^, PyUnicodeFromString(
+        Format(rs_CannotCreate, [APythonType.TypeName])));
 end;
 
 function TPyDelphiObject.CreateContainerAccess: TContainerAccess;
@@ -2960,217 +2944,219 @@ begin
       SL.Add(RttiField.Name);
 end;
 
-function RttiCall(ParentAddress: pointer; PythonType: TPythonType;
-  DelphiWrapper: TPyDelphiWrapper; MethName: string;
-  ParentRtti: TRttiStructuredType; ob1, ob2: PPyObject;
-  AParentAddrIsClass: boolean): PPyObject;
-
-  function ParamAsDynArray(PyValue: PPyObject; const RttiParam: TRttiParameter; out ParamValue: TValue): Boolean;
-  var
-    Arr: array of TValue;
-    I: Integer;
-    elType: PPTypeInfo;
-    V: Variant;
-    Num: Int64;
-  begin
-    Result := False;
-    if (RttiParam.ParamType = nil) or (RttiParam.ParamType.Handle = nil) or (GetTypeData(RttiParam.ParamType.Handle) = nil) then
-      Exit;
-    elType := GetTypeData(RttiParam.ParamType.Handle).elType;
-    if elType = nil then
-      elType := GetTypeData(RttiParam.ParamType.Handle).elType2;
-    if elType = nil then
-      Exit;
-
-    SetLength(Arr, PythonType.Engine.PyList_Size(PyValue));
-    for I := 0 to PythonType.Engine.PyList_Size(PyValue) - 1 do
-    begin
-      V := PythonType.Engine.PyObjectAsVariant(PythonType.Engine.PyList_GetItem(PyValue, i));
-      if elType^.Kind = tkEnumeration then
-      begin
-        Num := TValue.FromVariant(V).Cast(TypeInfo(Int64)).AsInt64;
-        Arr[i] := TValue.FromOrdinal(elType^, Num);
-      end
-      else
-        Arr[i] := TValue.FromVariant(V).Cast(elType^);
-    end;
-    ParamValue := TValue.FromArray(RttiParam.ParamType.Handle, Arr);
-    Result := True;
-  end;
+function RttiCall(ParentAddress: pointer; DelphiWrapper: TPyDelphiWrapper;
+  MethName: string; ParentRtti: TRttiStructuredType; ob1, ob2: PPyObject;
+  AParentAddrIsClass: Boolean): PPyObject;
 
   function FindMethod(const MethName:string; RttiType : TRttiType;
-    PyArgs: PPyObject; var Args: array of TValue):TRttiMethod;
+    PyArgs: PPyObject; var Args: array of TValue;
+    out VarParamIndices: TArray<Integer>; out ErrMsg: string):TRttiMethod;
   // Deals with overloaded methods
   // Constructs the Arg Array
   // PyArgs is a Python tuple
-  Var
+  var
     Method: TRttiMethod;
-    Index: Integer;
-    ErrMsg: string;
-    Obj: TObject;
-    ClassRef: TClass;
-    PyValue : PPyObject;
-    Param: TRttiParameter;
-    Params : TArray<TRttiParameter>;
-    SearchContinue: Boolean;
   begin
     Result := nil;
+    ErrMsg := rs_UnknownAttribute;
     for Method in RttiType.GetMethods do
-      if SameText(Method.Name, MethName) then
-      begin
-        Params := Method.GetParameters;
-        if Length(Args) = Length(Params) then
+      if SameText(Method.Name, MethName) then begin
+        if PyArgsToValues(PyArgs, Method, Args, VarParamIndices) then
         begin
           Result := Method;
-          SearchContinue := False;
-          for Index := 0 to Length(Params) - 1 do
-          begin
-            Param := Params[Index];
-            if (Param.ParamType = nil) or
-              (Param.Flags * [TParamFlag.pfVar, TParamFlag.pfOut] <> []) then
-            begin
-              Result := nil;
-              SearchContinue := True;
-              Break;
-            end;
-
-            PyValue := PythonType.Engine.PyTuple_GetItem(PyArgs, Index);
-            if Param.ParamType = nil then
-            begin
-              Result := nil;
-              Break
-            end
-            else if Param.ParamType.TypeKind = tkClass then
-            begin
-              if ValidateClassProperty(PyValue, Param.ParamType.Handle, Obj, ErrMsg)
-              then
-                Args[Index] := Obj
-              else begin
-                Result := nil;
-                Break
-              end
-            end
-            else if (Param.ParamType.TypeKind = tkClassRef) then
-            begin
-              if ValidateClassRef(PyValue, Param.ParamType.Handle, ClassRef, ErrMsg) then
-                Args[Index] := ClassRef
-              else begin
-                Result := nil;
-                Break
-              end
-            end
-            else if Param.ParamType.TypeKind = tkInterface then
-            begin
-              if not ValidateInterfaceProperty(PyValue, Param.ParamType as TRttiInterfaceType, Args[Index], ErrMsg) then
-              begin
-                Result := nil;
-                Break
-              end
-            end
-            else if Param.ParamType.TypeKind in [tkRecord{$IFDEF MANAGED_RECORD},tkMRecord{$ENDIF}] then
-            begin
-              if not ValidateRecordProperty(PyValue, Param.ParamType.Handle, Args[Index], ErrMsg) then
-              begin
-                Result := nil;
-                Break
-              end
-            end
-            else if (Param.ParamType.TypeKind = tkDynArray) and PythonType.Engine.PyList_Check(PyValue) then
-            begin
-              if ParamAsDynArray(PyValue, Param, Args[Index]) then
-                Continue; //to avoid last check
-            end
-            else begin
-              if not SimplePythonToValue(PyValue, Param.ParamType.Handle,
-                Args[Index], ErrMsg) then
-              begin
-                Result := nil;
-                Break
-              end;
-            end;
-
-            if (Param.ParamType <> nil) and not Args[Index].IsType(Param.ParamType.Handle) then
-            begin
-              Result :=nil;
-              Break;
-            end;
-          end; // for params
-
-          if not SearchContinue then
-            Break;
-        end;
-     end;
+          Break;
+        end
+        else
+          ErrMsg := rs_IncompatibleArguments;
+      end;
   end;
 
-  procedure InvalidArguments(const MethName, ErrMsg : string);
-  begin
-    with GetPythonEngine do
-      PyErr_SetObject(PyExc_TypeError^, PyUnicodeFromString(
-        Format(rs_ErrInvalidArgs,
-        [MethName, ErrMsg])));
-  end;
-
-Var
-  Args: array of TValue;
-  ArgCount: Integer;
-  meth: TRttiMethod;
-  ret: TValue;
+var
+  LArgs: TArray<TValue>;
+  LVarParamIndices: TArray<Integer>;
+  LArgCount: Integer;
+  Method: TRttiMethod;
   ErrMsg : string;
-  Addr: TValue;
 
 begin
   Result := nil;
-  // Ignore keyword arguments ob2
-  // ob1 is a tuple with zero or more elements
 
-  ArgCount := PythonType.Engine.PyTuple_Size(ob1);
-  SetLength(Args, ArgCount);
+  LArgCount := DelphiWrapper.Engine.PyTuple_Size(ob1);
+  SetLength(LArgs, LArgCount);
 
-  meth := FindMethod(MethName, ParentRtti, ob1, Args);
+  Method := FindMethod(MethName, ParentRtti, ob1, LArgs, LVarParamIndices, ErrMsg);
 
-  if not Assigned(meth) then begin
-    InvalidArguments(MethName, rs_IncompatibleArguments);
+  if not Assigned(Method) then begin
+    InvalidArguments(MethName, ErrMsg);
     Exit;
   end;
 
+  Result := RttiCall(ParentAddress, DelphiWrapper, Method, LArgs,
+    LVarParamIndices, AParentAddrIsClass);
+end;
+
+function RttiCall(ParentAddress: pointer; DelphiWrapper: TPyDelphiWrapper;
+  Method: TRttiMethod; ob1, ob2: PPyObject;
+  AParentAddrIsClass: Boolean = false): PPyObject;
+var
+  LArgs: TArray<TValue>;
+  LVarParamIndices: TArray<Integer>;
+begin
+  Result := nil;
+
+  // Ignore keyword arguments ob2
+  // ob1 is a tuple with zero or more elements
+  SetLength(LArgs, DelphiWrapper.Engine.PyTuple_Size(ob1));
+  if not PyArgsToValues(ob1, Method, LArgs, LVarParamIndices) then
+  begin
+    InvalidArguments(Method.Name, rs_IncompatibleArguments);
+    Exit;
+  end;
+
+  Result := RttiCall(ParentAddress, DelphiWrapper, Method, LArgs,
+    LVarParamIndices, AParentAddrIsClass);
+end;
+
+
+function RttiCall(ParentAddress: pointer; DelphiWrapper: TPyDelphiWrapper;
+  Method: TRttiMethod; const Args: TArray<TValue>;
+  const  VarParamIndices: TArray<Integer>;
+  AParentAddrIsClass: Boolean = false): PPyObject;
+var
+  Addr: TValue;
+  ReturnValue: TValue;
+  ErrMsg: string;
+  TempPy: PPyObject;
+  Index, Pos: Integer;
+begin
+  // Args and VarParamIndices are already setup and validated
   try
-    if ParentRtti is TRttiInstanceType then
-      if meth.IsClassMethod or meth.IsStatic then
+    if Method.Parent is TRttiInstanceType then
+      if Method.IsClassMethod or Method.IsStatic then
         if AParentAddrIsClass then
           Addr := TValue.From(TClass(ParentAddress))
         else
           Addr := TValue.From(TObject(ParentAddress).ClassType)
       else
         Addr := TValue.From(TObject(ParentAddress))
-    else if ParentRtti is TRttiInterfaceType then
-       TValue.Make(@ParentAddress, ParentRtti.Handle, Addr)
+    else if Method.Parent is TRttiInterfaceType then
+       TValue.Make(@ParentAddress, Method.Parent.Handle, Addr)
     else
       Addr := TValue.From(ParentAddress);
-    ret := meth.Invoke(Addr, Args);
-    if ret.IsEmpty then
-      Result := GetPythonEngine.ReturnNone
-    else if ret.Kind = tkClass then
-      Result := DelphiWrapper.Wrap(ret.AsObject)
-    else if ret.Kind = tkClassRef then
-      Result := DelphiWrapper.WrapClass(ret.AsClass)
-    else if ret.Kind = tkInterface then
-      Result := DelphiWrapper.WrapInterface(ret, true)
-    else if ret.Kind in [tkRecord{$IFDEF MANAGED_RECORD},tkMRecord{$ENDIF}] then
-      Result := DelphiWrapper.WrapRecord(ret, true)
-    else begin
-      Result := SimpleValueToPython(ret, ErrMsg);
-      if Result = nil then
-        with PythonType.Engine do
-          PyErr_SetObject(PyExc_TypeError^, PyUnicodeFromString(
-            Format(rs_ErrInvalidRet, [MethName, ErrMsg])));
+
+    ReturnValue := Method.Invoke(Addr, Args);
+
+    { Deal with var/out arguments
+      e.g.
+        procedure Test(var I: Integer)
+        use in python:
+        ivalue = objref.Test(param)
+
+        procedures/functions with var parameters should return a tuple
+        function Test(var I: Integer): Integer
+        use in python:
+        res, ivalue = objref.Test(ivalue)
+
+        procedure Test(var I: Integer; var S: string);
+        use in python:
+        ivalue, svalue = objref.Test(ivalue, svalue) }
+
+
+    if Length(VarParamIndices) = 0 then
+      Result := TValueToPyObject(ReturnValue, DelphiWrapper, ErrMsg)
+    else if (Method.ReturnType = nil) and (Length(VarParamIndices) = 1) then
+      Result := TValueToPyObject(Args[VarParamIndices[0]], DelphiWrapper, ErrMsg)
+    else
+    begin
+      // we return a tuple - start with the return value
+      if Method.ReturnType = nil then
+        Pos := 0
+      else
+        Pos := 1;
+
+      Result := DelphiWrapper.Engine.PyTuple_New(Length(VarParamIndices) + Pos);
+      if Method.ReturnType <> nil then
+      begin
+        TempPy := TValueToPyObject(ReturnValue, DelphiWrapper, ErrMsg);
+
+        if TempPy = nil then
+        begin
+          DelphiWrapper.Engine.Py_DECREF(Result);
+          Result := nil;
+        end
+        else
+          DelphiWrapper.Engine.PyTuple_SetItem(Result, 0, TempPy);
+      end;
+
+      if Result <> nil then
+        for Index in VarParamIndices do
+        begin
+          TempPy := TValueToPyObject(Args[Index], DelphiWrapper, ErrMsg);
+          if TempPy = nil then
+          begin
+            DelphiWrapper.Engine.Py_DECREF(Result);
+            Result := nil;
+            Break;
+          end
+          else
+          begin
+            DelphiWrapper.Engine.PyTuple_SetItem(Result, Pos, TempPy);
+            Inc(Pos);
+          end;
+        end;
     end;
+
+    if Result = nil then
+      with DelphiWrapper.Engine do
+        PyErr_SetObject(PyExc_TypeError^, PyUnicodeFromString(
+          Format(rs_ErrInvalidRet, [Method.Name, ErrMsg])));
   except
     on E: Exception do begin
       Result := nil;
-      InvalidArguments(MethName, E.Message);
+      InvalidArguments(Method.Name, E.Message);
     end;
   end;
 end;
+
+function GetRttiProperty(ParentAddr: Pointer; Prop: TRttiProperty;
+ PyDelphiWrapper: TPyDelphiWrapper; out ErrMsg: string): PPyObject;
+begin
+  Result := nil;
+  if Ord(Prop.Visibility) < Ord(mvPublic) then
+    ErrMsg := rs_NoAccess
+  else if not Prop.IsReadable then
+    ErrMsg := rs_NotReadable
+  else if Prop.PropertyType = nil then
+    ErrMsg := rs_ErrNoTypeInfo
+  else if Prop.PropertyType.TypeKind = tkMethod then
+  begin
+    if (Prop is TRttiInstanceProperty) and  (Prop.Visibility = mvPublished) then
+      Result := PyDelphiWrapper.fEventHandlerList.GetCallable(TObject(ParentAddr),
+        TRttiInstanceProperty(Prop).PropInfo);
+  end
+  else
+    Result := TValueToPyObject(Prop.GetValue(ParentAddr), PyDelphiWrapper, ErrMsg);
+end;
+
+function GetRttiField(ParentAddr: Pointer; Field: TRttiField;
+ PyDelphiWrapper: TPyDelphiWrapper; out ErrMsg: string): PPyObject;
+begin
+  Result := nil;
+  if Ord(Field.Visibility) < Ord(mvPublic) then
+    ErrMsg := rs_NoAccess
+  else if Field.FieldType = nil then
+    ErrMsg := rs_ErrNoTypeInfo
+  else if Field.FieldType.TypeKind in [tkRecord{$IFDEF MANAGED_RECORD},tkMRecord{$ENDIF}] then
+    //Potentially dangerous as the returned value, which is a pointer into the object,
+    //could be stored on the python side, then the object freed, and the stored pointer later
+    //used to access no longer allocated memory
+    //But I can't see any good alternative if Python should be able to write directly into
+    //fields of a record that's part of an object.
+    Result := PyDelphiWrapper.WrapRecord(PByte(ParentAddr) + Field.Offset, TRttiStructuredType(Field.FieldType))
+  else
+    Result := TValueToPyObject(Field.GetValue(ParentAddr), PyDelphiWrapper, ErrMsg);
+end;
+
 
 function GetRttiAttr(ParentAddr: Pointer; ParentType: TRttiStructuredType;
   const AttrName: string; PyDelphiWrapper: TPyDelphiWrapper;
@@ -3199,67 +3185,12 @@ begin
     begin
       Prop := ParentType.GetProperty(AttrName);
       if Prop <> nil then
-      begin
-        if Ord(Prop.Visibility) < Ord(mvPublic) then
-          ErrMsg := rs_NoAccess
-        else if not Prop.IsReadable then
-          ErrMsg := rs_NotReadable
-        else if Prop.PropertyType = nil then
-          ErrMsg := rs_ErrNoTypeInfo
-        else
-        case Prop.PropertyType.TypeKind of
-          tkClass:
-            Result := PyDelphiWrapper.Wrap(Prop.GetValue(ParentAddr).AsObject);
-          tkClassRef:
-            Result := PyDelphiWrapper.WrapClass(Prop.GetValue(ParentAddr).AsClass);
-          tkInterface:
-            // Must be a copy, otherwise reference counting fails and the returned
-            // interface might be freed while python is holding a reference to it
-            Result := PyDelphiWrapper.WrapInterface(Prop.GetValue(ParentAddr), true);
-          tkRecord{$IFDEF MANAGED_RECORD},tkMRecord{$ENDIF}:
-            // Must be a copy, property getters are not allowed to leak access to underlying storage
-            Result := PyDelphiWrapper.WrapRecord(Prop.GetValue(ParentAddr), true);
-          tkMethod:
-            if (ParentType is TRttiInstanceType) and (Prop is TRttiInstanceProperty) then
-              Result := PyDelphiWrapper.fEventHandlerList.GetCallable(TObject(ParentAddr),
-                TRttiInstanceProperty(Prop).PropInfo);
-        else
-          Result := SimpleValueToPython(Prop.GetValue(ParentAddr), ErrMsg)
-        end;
-      end
+        Result := GetRttiProperty(ParentAddr, Prop, PyDelphiWrapper, ErrMsg)
       else
       begin
         Field := ParentType.GetField(AttrName);
         if Field <> nil then
-        begin
-          if Ord(Field.Visibility) < Ord(mvPublic) then
-            ErrMsg := rs_NoAccess
-          else if Field.FieldType = nil then
-            ErrMsg := rs_ErrNoTypeInfo
-          else
-          case Field.FieldType.TypeKind of
-            tkClass:
-              Result := PyDelphiWrapper.Wrap(Field.GetValue(ParentAddr).AsObject);  // Returns None if Field is nil
-            tkClassRef:
-              Result := PyDelphiWrapper.WrapClass(Field.GetValue(ParentAddr).AsClass);  // Returns None if Field is nil
-            tkInterface:
-              // Must be a copy, otherwise reference counting fails and the returned
-              // interface might be freed while python is holding a reference to it
-              Result := PyDelphiWrapper.WrapInterface(Field.GetValue(ParentAddr), true);
-            tkRecord{$IFDEF MANAGED_RECORD},tkMRecord{$ENDIF}:
-              if Field.FieldType is TRttiStructuredType then
-                //Potentially dangerous as the returned value, which is a pointer into the object,
-                //could be stored on the python side, then the object freed, and the stored pointer later
-                //used to access no longer allocated memory
-                //But I can't see any good alternative if Python should be able to write directly into
-                //fields of a record that's part of an object.
-                //Maybe a relationship should be established between this wrapper and the wrapper of the parent object
-                //such that a free notification on the parent object will disable access through this wrapper?
-                Result := PyDelphiWrapper.WrapRecord(PByte(ParentAddr) + Field.Offset, TRttiStructuredType(Field.FieldType));
-          else
-            Result := SimpleValueToPython(Field.GetValue(ParentAddr), ErrMsg)
-          end;
-        end
+          Result := GetRttiField(ParentAddr, Field, PyDelphiWrapper, ErrMsg)
         else
           ErrMsg := rs_UnknownAttribute;
       end;
@@ -3272,113 +3203,78 @@ begin
   end;
 end;
 
+function SetRttiProperty(const ParentAddr: Pointer;  Prop: TRttiProperty;
+  Value: PPyObject;  PyDelphiWrapper: TPyDelphiWrapper;
+  out ErrMsg: string): Boolean;
+var
+  AttrValue: TValue;
+begin
+  Result := False;
+  if Ord(Prop.Visibility) < Ord(mvPublic) then
+    ErrMsg := rs_NoAccess
+  else if not Prop.IsWritable then
+    ErrMsg := rs_NotWritable
+  else if Prop.PropertyType = nil then
+    ErrMsg := rs_ErrNoTypeInfo
+  else if Prop.PropertyType.TypeKind = tkMethod then
+  begin
+    if (Prop is TRttiInstanceProperty) and  (Prop.Visibility = mvPublished) then
+      Result := PyDelphiWrapper.EventHandlers.Link(TObject(ParentAddr),
+        (Prop as TRttiInstanceProperty).PropInfo, Value, ErrMsg)
+    else
+      ErrMsg := rs_NotPublished;
+  end
+  else if PyObjectToTValue(Value, Prop.PropertyType, AttrValue, ErrMsg) then
+  begin
+    Prop.SetValue(ParentAddr, AttrValue);
+    Result := True;
+  end;
+end;
+
+function SetRttiField(const ParentAddr: Pointer;  Field: TRttiField;
+  Value: PPyObject;  PyDelphiWrapper: TPyDelphiWrapper;
+  out ErrMsg: string): Boolean;
+var
+  AttrValue: TValue;
+begin
+  Result := False;
+  if Ord(Field.Visibility) < Ord(mvPublic) then
+    ErrMsg := rs_NoAccess
+  else if Field.FieldType = nil then
+    ErrMsg := rs_ErrNoTypeInfo
+  else if PyObjectToTValue(Value, Field.FieldType, AttrValue, ErrMsg) then
+  begin
+    Field.SetValue(ParentAddr, AttrValue);
+    Result := True;
+  end;
+end;
+
 function SetRttiAttr(const ParentAddr: Pointer;  ParentType: TRttiStructuredType;
   const AttrName: string; Value: PPyObject;  PyDelphiWrapper: TPyDelphiWrapper;
   out ErrMsg: string): Boolean;
 var
   Prop: TRttiProperty;
   Field: TRttiField;
-  V: TValue;
-  Obj: TObject;
-  Cls: TClass;
-  ValueOut: TValue;
 begin
   Result := False;
 
-  Prop := ParentType.GetProperty(AttrName);
-  if Prop <> nil then
-    try
-      if Ord(Prop.Visibility) < Ord(mvPublic) then
-        ErrMsg := rs_NoAccess
-      else if not Prop.IsWritable then
-        ErrMsg := rs_NotWritable
-      else if Prop.PropertyType = nil then
-        ErrMsg := rs_ErrNoTypeInfo
+  try
+    Prop := ParentType.GetProperty(AttrName);
+    if Prop <> nil then
+      Result := SetRttiProperty(ParentAddr, Prop, Value, PyDelphiWrapper, ErrMsg)
+    else
+    begin
+      Field := ParentType.GetField(AttrName);
+      if Field <> nil then
+        Result := SetRttiField(ParentAddr, Field, Value, PyDelphiWrapper, ErrMsg)
       else
-      case Prop.PropertyType.TypeKind of
-        tkClass:
-          if ValidateClassProperty(Value, Prop.PropertyType.Handle, Obj, ErrMsg) then begin
-            Prop.SetValue(ParentAddr, Obj);
-            Result := True;
-          end;
-        tkClassRef:
-          if ValidateClassRef(Value, Prop.PropertyType.Handle, Cls, ErrMsg) then begin
-            Prop.SetValue(ParentAddr, Cls);
-            Result := True;
-          end;
-        tkInterface:
-          if ValidateInterfaceProperty(Value, Prop.PropertyType as TRttiInterfaceType, ValueOut, ErrMsg) then begin
-            Prop.SetValue(ParentAddr, ValueOut);
-            Result := True;
-          end;
-        tkRecord{$IFDEF MANAGED_RECORD},tkMRecord{$ENDIF}:
-          if ValidateRecordProperty(Value, Prop.PropertyType.Handle, ValueOut, ErrMsg) then begin
-            Prop.SetValue(ParentAddr, ValueOut);
-            Result := True;
-          end;
-        tkMethod:
-          if Prop.Visibility = mvPublished then
-            Result := PyDelphiWrapper.EventHandlers.Link(TObject(ParentAddr),
-              (Prop as TRttiInstanceProperty).PropInfo, Value, ErrMsg)
-          else
-            ErrMsg := rs_NotPublished;
-      else
-        begin
-          Result := SimplePythonToValue(Value, Prop.PropertyType.Handle, V, ErrMsg);
-          if Result then
-            Prop.SetValue(ParentAddr, V);
-        end;
-      end;
-    except
-      on E: Exception do begin
-        Result := False;
-        ErrMsg := E.Message;
-      end;
-    end
-  else
-  begin
-    Field := ParentType.GetField(AttrName);
-    if Field <> nil then
-      try
-        if Ord(Field.Visibility) < Ord(mvPublic) then
-          ErrMsg := rs_NoAccess
-        else if Field.FieldType = nil then
-          ErrMsg := rs_ErrNoTypeInfo
-        else
-        case Field.FieldType.TypeKind of
-          tkClass:
-            if ValidateClassProperty(value, Field.FieldType.Handle, Obj, ErrMsg) then begin
-              Field.SetValue(ParentAddr, Obj);
-              Result := True;
-            end;
-          tkClassRef:
-            if ValidateClassRef(value, Field.FieldType.Handle, Cls, ErrMsg) then begin
-              Field.SetValue(ParentAddr, Cls);
-              Result := True;
-            end;
-          tkInterface:
-            if ValidateInterfaceProperty(Value, Field.FieldType as TRttiInterfaceType, ValueOut, ErrMsg) then begin
-              Field.SetValue(ParentAddr, ValueOut);
-              Result := True;
-            end;
-          tkRecord{$IFDEF MANAGED_RECORD},tkMRecord{$ENDIF}:
-            if ValidateRecordProperty(Value, Field.FieldType.Handle, ValueOut, ErrMsg) then begin
-              Field.SetValue(ParentAddr, ValueOut);
-              Result := True;
-            end;
-        else
-          begin
-            Result := SimplePythonToValue(Value, Field.FieldType.Handle, V, ErrMsg);
-            if Result then
-              Field.SetValue(ParentAddr, V);
-          end;
-        end;
-      except
-        on E: Exception do begin
-          Result := False;
-          ErrMsg := E.Message;
-        end;
-      end
+        ErrMsg := rs_UnknownAttribute;
+    end;
+  except
+    on E: Exception do begin
+      Result := False;
+      ErrMsg := E.Message;
+    end;
   end;
 end;
 
@@ -3389,13 +3285,6 @@ begin
   inherited;
   if Assigned(APythonType) and (APythonType.Owner is TPyDelphiWrapper) then
     PyDelphiWrapper := TPyDelphiWrapper(APythonType.Owner);
-end;
-
-destructor TPyRttiObject.Destroy;
-begin
-  if Assigned(FCopy) then
-    Dispose(FCopy);
-  inherited;
 end;
 
 function TPyRttiObject.Dir_Wrapper(args: PPyObject): PPyObject;
@@ -3449,13 +3338,6 @@ begin
     'Returns the list of all methods, fields and properties of this instance.');
 end;
 
-function TPyRttiObject.Repr: PPyObject;
-begin
-  Result := GetPythonEngine.PyUnicodeFromString(
-   Format('<Delphi record of type %s at %x>',
-   [RttiType.Name, NativeInt(Self)]) )
-end;
-
 function TPyRttiObject.SetAttrO(key, value: PPyObject): Integer;
 var
    KeyName: string;
@@ -3493,31 +3375,6 @@ begin
   PythonType.Services.Basic := [bsGetAttrO, bsSetAttrO, bsRepr, bsStr];
 end;
 
-function TPyRttiObject.CreateCopy(const AValue: TValue): pointer;
-var
-  LContext: TRttiContext;
-  LRttiType: TRttiStructuredType;
-begin
-  LContext := TRttiContext.Create();
-  try
-    LRttiType := LContext.GetType(AValue.TypeInfo) as TRttiStructuredType;
-  finally
-    LContext.Free;
-  end;
-
-  if Assigned(FCopy) then begin
-    Dispose(FCopy);
-    FCopy := nil;
-  end;
-
-  New(FCopy);
-  FCopy^ := AValue;
-  Result := FCopy^.GetReferenceToRawData();
-
-  if LRttiType.TypeKind = tkInterface then
-    Result := PPointer(Addr)^;
-end;
-
 procedure TPyRttiObject.SetAddrAndType(Address: Pointer; Typ: TRttiStructuredType);
 begin
   fAddr := Address;
@@ -3526,8 +3383,7 @@ begin
   fRttiType := Typ;
 end;
 
-procedure TPyRttiObject.SetValueAndType(const AValue: TValue;
-  const ACopy: boolean);
+procedure TPyRttiObject.SetUpFromTValue(const AValue: TValue);
 var
   LRttiCtx: TRttiContext;
   LRttiType: TRttiStructuredType;
@@ -3539,23 +3395,28 @@ begin
     LRttiCtx.Free();
   end;
 
-  if ACopy then
-    SetAddrAndType(CreateCopy(AValue), LRttiType)
-  else if RttiType.TypeKind in [tkRecord{$IFDEF MANAGED_RECORD}, tkMRecord{$ENDIF}] then
-    SetAddrAndType(AValue.GetReferenceToRawData(), LRttiType)
-  else if RttiType.TypeKind = tkInterface then
-    SetAddrAndType(Pointer(AValue.GetReferenceToRawData()^), LRttiType)
+  FCopy := AValue;
+  if LRttiType.TypeKind in [tkRecord{$IFDEF MANAGED_RECORD}, tkMRecord{$ENDIF}] then
+    SetAddrAndType(FCopy.GetReferenceToRawData(), LRttiType)
+  else if LRttiType.TypeKind = tkInterface then
+    SetAddrAndType(Pointer(FCopy.GetReferenceToRawData()^), LRttiType)
 end;
-
 
 { TPyPascalRecord }
 
 function TPyPascalRecord.GetValue: TValue;
 begin
-  if Assigned(FCopy) then
-    Result := FCopy^
+  if FCopy.IsEmpty then
+    TValue.Make(fAddr, RttiType.Handle, Result)
   else
-    TValue.Make(fAddr, RttiType.Handle, Result);
+    Result := FCopy;
+end;
+
+function TPyPascalRecord.Repr: PPyObject;
+begin
+  Result := GetPythonEngine.PyUnicodeFromString(
+   Format('<Pascal record of type %s at %x>',
+   [RttiType.Name, NativeInt(fAddr)]) )
 end;
 
 class procedure TPyPascalRecord.SetupType(PythonType: TPythonType);
@@ -3569,10 +3430,17 @@ end;
 
 function TPyPascalInterface.GetValue: TValue;
 begin
-  if Assigned(FCopy) then
-    Result := FCopy^
+  if FCopy.IsEmpty then
+    TValue.Make(@fAddr, RttiType.Handle, Result)
   else
-    TValue.Make(@fAddr, RttiType.Handle, Result);
+    Result := FCopy;
+end;
+
+function TPyPascalInterface.Repr: PPyObject;
+begin
+  Result := GetPythonEngine.PyUnicodeFromString(
+   Format('<Pascal interface of type %s at %x>',
+   [RttiType.Name, NativeInt(fAddr)]) )
 end;
 
 class procedure TPyPascalInterface.SetupType(PythonType: TPythonType);
@@ -3784,7 +3652,7 @@ begin
 {$IFDEF EXTENDED_RTTI}
     Context := TRttiContext.Create();
     try
-      RttiType := Context.GetType(DelphiObject.ClassType);
+      RttiType := Context.GetType(DelphiObject.ClassType());
       Rtti_Dir(SL, RttiType);
     finally
       Context.Free();
@@ -3807,7 +3675,7 @@ end;
 
 class function TPyDelphiObject.GetTypeName : string;
 begin
-  Result := Copy(DelphiObjectClass.ClassName, 2, MaxInt);
+  Result := Copy(DelphiObjectClass.ClassName, 2);
 end;
 
 function TPyDelphiObject.HasContainerAccessClass: Boolean;
@@ -3875,15 +3743,12 @@ class procedure TPyDelphiObject.RegisterGetSets(PythonType: TPythonType);
 begin
   inherited;
   // then register TObject + custom getters/setters.
-  with PythonType do
-    begin
-      AddGetSet('ClassName', @TPyDelphiObject.Get_ClassName, nil,
-        'Returns the TObject.ClassName', nil);
-      AddGetSet('__bound__', @TPyDelphiObject.Get_Bound, nil,
-        'Returns True if the wrapper is still bound to the Delphi instance.', nil);
-      AddGetSet('__owned__', @TPyDelphiObject.Get_Owned, @TPyDelphiObject.Set_Owned,
-        'Returns True if the wrapper owns the Delphi instance.', nil);
-    end;
+  PythonType.AddGetSet('ClassName', @TPyDelphiObject.Get_ClassName, nil,
+    'Returns the TObject.ClassName', nil);
+  PythonType.AddGetSet('__bound__', @TPyDelphiObject.Get_Bound, nil,
+    'Returns True if the wrapper is still bound to the Delphi instance.', nil);
+  PythonType.AddGetSet('__owned__', @TPyDelphiObject.Get_Owned, @TPyDelphiObject.Set_Owned,
+    'Returns True if the wrapper owns the Delphi instance.', nil);
 end;
 
 class procedure TPyDelphiObject.RegisterMethods(PythonType: TPythonType);
@@ -4106,134 +3971,161 @@ begin
   Result := SetProperties(GetSelf, keywords);
 end;
 
-class procedure TPyDelphiObject.SetupType(PythonType: TPythonType);
+class procedure TPyDelphiObject.SetupType(APythonType: TPythonType);
 var
   _ContainerAccessClass : TContainerAccessClass;
+  PyWrapper: TPyDelphiWrapper;
+  NearestAncestorClass: TClass;
+  RegisteredClass: TRegisteredClass;
+  Index: Integer;
+  {$IFDEF EXTENDED_RTTI}
+  LDocStr: string;
+  ExcludedMembers: TArray<string>;
+  {$ENDIF EXTENDED_RTTI}
 begin
   inherited;
-  PythonType.TypeName := AnsiString(GetTypeName);
-  PythonType.Name := string(PythonType.TypeName) + TPythonType.TYPE_COMP_NAME_SUFFIX;
-  PythonType.GenerateCreateFunction := False;
-  PythonType.DocString.Text := 'Wrapper for Delphi ' + DelphiObjectClass.ClassName;
-  PythonType.Services.Basic := [bsGetAttrO, bsSetAttrO, bsRepr, bsStr, bsRichCompare];
+  APythonType.TypeName := AnsiString(GetTypeName);
+  APythonType.Name := string(APythonType.TypeName) + TPythonType.TYPE_COMP_NAME_SUFFIX;
+  APythonType.GenerateCreateFunction := False;
+  APythonType.DocString.Text := 'Wrapper for Pascal class ' + DelphiObjectClass.ClassName;
+  APythonType.Services.Basic := [bsGetAttrO, bsSetAttrO, bsRepr, bsStr, bsRichCompare];
   _ContainerAccessClass := GetContainerAccessClass;
   if Assigned(_ContainerAccessClass) then
   begin
-    PythonType.Services.Basic := PythonType.Services.Basic + [bsIter];
-    PythonType.Services.Sequence := PythonType.Services.Sequence + [ssLength, ssItem];
+    APythonType.Services.Basic := APythonType.Services.Basic + [bsIter];
+    APythonType.Services.Sequence := APythonType.Services.Sequence + [ssLength, ssItem];
     if _ContainerAccessClass.SupportsWrite then
-      PythonType.Services.Sequence := PythonType.Services.Sequence + [ssAssItem];
+      APythonType.Services.Sequence := APythonType.Services.Sequence + [ssAssItem];
     if _ContainerAccessClass.SupportsIndexOf then
-      PythonType.Services.Sequence := PythonType.Services.Sequence + [ssContains];
+      APythonType.Services.Sequence := APythonType.Services.Sequence + [ssContains];
   end;
+
+  // Find nearest registered ancestor class and set it as base
+  PyWrapper := APythonType.Owner as TPyDelphiWrapper;
+  NearestAncestorClass := nil;
+  for Index := PyWrapper.fClassRegister.Count - 1 downto 0 do
+  begin
+    RegisteredClass := PyWrapper.fClassRegister[Index] as TRegisteredClass;
+    if DelphiObjectClass.InheritsFrom(RegisteredClass.DelphiClass) then
+    begin
+      APythonType.BaseType := RegisteredClass.PythonType;
+      NearestAncestorClass := RegisteredClass.DelphiClass;
+      Break;
+    end;
+  end;
+  {$IFDEF EXTENDED_RTTI}
+  //Try to load the class doc string from doc server
+  if Assigned(PyDocServer) and PyDocServer.Initialized and
+    PyDocServer.ReadTypeDocStr(DelphiObjectClass.ClassInfo, LDocStr)
+  then
+    APythonType.DocString.Text := LDocStr;
+
+  ExcludedMembers := ExcludedExposedMembers(APythonType);
+  ExposeMethods(DelphiObjectClass, NearestAncestorClass, APythonType,
+    PyWrapper,  ExcludedMembers);
+  ExposeFields(DelphiObjectClass, NearestAncestorClass, APythonType,
+    PyWrapper, ExcludedMembers);
+  ExposeProperties(DelphiObjectClass, NearestAncestorClass, APythonType,
+    PyWrapper, ExcludedMembers);
+  ExposeIndexedProperties(DelphiObjectClass, NearestAncestorClass, APythonType,
+    PyWrapper, ExcludedMembers);
+  {$ENDIF EXTENDED_RTTI}
 end;
 
-{$IFDEF EXPOSE_MEMBERS}
-class function TPyDelphiObject.GetExcludedExposeMethods(
-  const APythonType: TPythonType): TArray<string>;
+{$IFDEF EXTENDED_RTTI}
+class function TPyDelphiObject.ExcludedExposedMembers(APythonType: TPythonType): TArray<string>;
 var
-  I: integer;
+  I, MethodCount: Integer;
 begin
-  Result := ['CPP_ABI_1', 'CPP_ABI_2', 'CPP_ABI_3'];
-  //Any method manually wrapped must be excluded
-  for I := 0 to APythonType.MethodCount - 1 do
-    Result := Result + [String(APythonType.Methods[I].ml_name)];
-end;
+  MethodCount := APythonType.MethodCount;
+  SetLength(Result, MethodCount + APythonType.GetSetCount);
 
-class function TPyDelphiObject.GetExcludedExposeGettersSetters(
-  const APythonType: TPythonType): TArray<string>;
-var
-  I: integer;
-begin
-  Result := [];
-  //Any field, property or indexed property manually wrapped must be excluded
+  for I := 0 to MethodCount - 1 do
+    Result[I] := string(APythonType.Methods[I].ml_name);
+
   for I := 0 to APythonType.GetSetCount - 1 do
-    Result := Result + [String(APythonType.GetSet[I].name)];
+    Result[MethodCount + I] := string(APythonType.GetSet[I].name);
 end;
 
-class procedure TPyDelphiObject.ExposeMethods(const AClass: TClass;
-  const APythonType: TPythonType; const APyDelphiWrapper: TPyDelphiWrapper;
-  const ADeclaredMethodsOnly: boolean; const AIncludedMethodNames,
-  AExcludedMethodNames: TArray<string>; const ADefCallback: TExposedMethodDefCallback);
+class procedure TPyDelphiObject.ExposeMethods(AClass: TClass;
+  NearestAncestorClass: TClass; APythonType: TPythonType;
+  APyDelphiWrapper: TPyDelphiWrapper; AExcludedMethodNames: TArray<string>);
 var
   LRttiCtx: TRttiContext;
-  LRttiType: TRttiType;
-  LRttiMethods: TArray<TRttiMethod>;
+  LRttiType: TRttiStructuredType;
   LRttiMethod: TRttiMethod;
-  LRttiElectedMethods: TArray<TRttiMethod>;
-  LBuffer: TArray<string>;
-  LExposedMethod: TExposedMethodImplementation;
+  AddedMethods: TArray<string>;
+  LExposedMethod: TExposedMethod;
+  LClass: TClass;
+  LDocStr: string;
 begin
-  SetLength(LBuffer, 0);
   LRttiCtx := TRttiContext.Create();
   try
-    LRttiType := LRttiCtx.GetType(AClass);
+    LRttiType := LRttiCtx.GetType(AClass) as TRttiStructuredType;
 
-    //Define if we will expose only the declared methods or include all inherited
-    if ADeclaredMethodsOnly then
-      LRttiMethods := LRttiType.GetDeclaredMethods()
-    else
-      LRttiMethods := LRttiType.GetMethods();
-
-    //Expose only the included methods
-    LRttiElectedMethods := TArray<TRttiMethod>.Create();
-    if Assigned(AIncludedMethodNames) then begin
-      for LRttiMethod in LRttiMethods do
-        if MatchStr(LRttiMethod.Name, AIncludedMethodNames) then
-          LRttiElectedMethods := LRttiElectedMethods + [LRttiMethod];
-    end else
-      LRttiElectedMethods := LRttiMethods;
-
-    for LRttiMethod in LRttiElectedMethods do begin
-      //Docs can be located in protected methods
-      if (Ord(LRttiMethod.Visibility) < Ord(TMemberVisibility.mvProtected)) then
+    AddedMethods := [];
+    for LRttiMethod in LRttiType.GetMethods do begin
+      if (Ord(LRttiMethod.Visibility) < Ord(TMemberVisibility.mvPublic)) then
         Continue;
 
-      //Ignores excluded method
+      // Ingnore constructors, destructors and operator overloads
+      if LRttiMethod.MethodKind in [mkConstructor, mkDestructor,
+        mkClassConstructor, mkClassDestructor, mkOperatorOverload]
+      then
+        Continue;
+
+      // Ignore methods with unhandled return type
+      if Assigned(LRttiMethod.ReturnType) and (LRttiMethod.ReturnType.TypeKind
+        in [tkUnknown, tkMethod, tkPointer, tkProcedure])
+      then
+        Continue;
+
+      // Skip methods declared in NearestAncestorClass and its ancestors
+      LClass := (LRttiMethod.Parent as TRttiInstanceType).MetaclassType;
+      if (NearestAncestorClass <> nil) and ((LClass = NearestAncestorClass) or
+        not (LClass.InheritsFrom(NearestAncestorClass)))
+      then
+        Continue;
+
+      // Ignore excluded methods
       if MatchStr(LRttiMethod.Name, AExcludedMethodNames) then
         Continue;
 
-      //Ignores duplicated methods
-      if MatchStr(LRttiMethod.Name, LBuffer) then
+      // Ignore duplicate methods
+      if MatchStr(LRttiMethod.Name, AddedMethods) then
         Continue;
 
-      //Creates the virtual method implementation
-      LExposedMethod := TExposedMethodImplementation.Create(
-        APythonType, LRttiMethod.Name, APyDelphiWrapper, APythonType, LRttiType,
-        LRttiMethod.IsClassMethod, LRttiMethod.IsStatic);
+      AddedMethods := AddedMethods + [LRttiMethod.Name];
 
-      //Give the client code an option to change any def
-      if Assigned(ADefCallback) and not ADefCallback(LRttiMethod.Name, LExposedMethod) then begin
-        //If client code disagrees, we remove the exposed method
-        FreeAndNil(LExposedMethod);
-        //Only register the method at the Python side if we really want to.
-        //In this case, we won't.
-        Continue;
-      end;
+      // Create the exposed method
+      LExposedMethod := TExposedMethod.Create(LRttiMethod,
+        APyDelphiWrapper, APythonType, LRttiType);
 
-      //Feed the buffer
-      SetLength(LBuffer, Length(LBuffer) + 1);
-      LBuffer[Length(LBuffer) - 1] := LRttiMethod.Name;
+      //Try to load the method doc string from doc server
+      //Try to load the method doc string from doc server
+      if Assigned(PyDocServer) and PyDocServer.Initialized and
+        PyDocServer.ReadMemberDocStr(LRttiMethod, LDocStr)
+      then
+        LExposedMethod.DocString := AnsiString(LDocStr);
 
-      //Build the DocStr
-      LExposedMethod.DocString := AnsiString(
-        TExposedMemberDocStringsBuilder.BuildDocs(LRttiMethod));
+      // Keep it alive until the Wrapper is Finalized
+      APyDelphiWrapper.fExposedMembers.Add(LExposedMethod);
 
       //Adds the Python method
       if LRttiMethod.IsStatic then
         APythonType.AddStaticMethodWithKeywords(
           PAnsiChar(LExposedMethod.Name),
-          LExposedMethod.VirtualMethodImplementation(),
+          LExposedMethod.Callback,
           PAnsiChar(LExposedMethod.DocString))
       else if LRttiMethod.IsClassMethod then
         APythonType.AddClassMethodWithKeywords(
           PAnsiChar(LExposedMethod.Name),
-          LExposedMethod.VirtualMethodImplementation(),
+          LExposedMethod.Callback,
           PAnsiChar(LExposedMethod.DocString))
       else
         APythonType.AddMethodWithKeywords(
           PAnsiChar(LExposedMethod.Name),
-          LExposedMethod.VirtualMethodImplementation(),
+          LExposedMethod.Callback,
           PAnsiChar(LExposedMethod.DocString));
     end;
   finally
@@ -4241,247 +4133,71 @@ begin
   end;
 end;
 
-class procedure TPyDelphiObject.ExposeProperties(const AClass: TClass;
-  const APythonType: TPythonType; const APyDelphiWrapper: TPyDelphiWrapper;
-  const ADeclaredPropertiesOnly: boolean; const AIncludedPropertyNames,
-  AExcludedPropertyNames: TArray<string>; const ADefCallback: TExposedPropertyDefCallback);
+class procedure TPyDelphiObject.ExposeFields(AClass: TClass;
+  NearestAncestorClass: TClass; APythonType: TPythonType;
+  APyDelphiWrapper: TPyDelphiWrapper; AExcludedFieldNames: TArray<string>);
 var
   LRttiCtx: TRttiContext;
-  LRttiType: TRttiType;
-  LRttiProperties: TArray<TRttiProperty>;
-  LRttiProperty: TRttiProperty;
-  LRttiElectedProperties: TArray<TRttiProperty>;
-  LBuffer: TArray<string>;
-  LExposedProperty: TExposedPropertyImplementation;
-begin
-  SetLength(LBuffer, 0);
-  LRttiCtx := TRttiContext.Create();
-  try
-    LRttiType := LRttiCtx.GetType(AClass);
-
-    //Define if we will expose only the declared properties or include all inherited
-    if ADeclaredPropertiesOnly then
-      LRttiProperties := LRttiType.GetDeclaredProperties()
-    else
-      LRttiProperties := LRttiType.GetProperties();
-
-    //Expose only the included properties
-    LRttiElectedProperties := TArray<TRttiProperty>.Create();
-    if Assigned(AIncludedPropertyNames) then begin
-      for LRttiProperty in LRttiProperties do
-        if MatchStr(LRttiProperty.Name, AIncludedPropertyNames) then
-          LRttiElectedProperties := LRttiElectedProperties + [LRttiProperty];
-    end else
-      LRttiElectedProperties := LRttiProperties;
-
-    for LRttiProperty in LRttiElectedProperties do begin
-      //Docs can be located in protected properties
-      if (Ord(LRttiProperty.Visibility) < Ord(TMemberVisibility.mvProtected)) then
-        Continue;
-
-      //Ignores excluded property
-      if MatchStr(LRttiProperty.Name, AExcludedPropertyNames) then
-        Continue;
-
-      //Ignores duplicated properties
-      if MatchStr(LRttiProperty.Name, LBuffer) then
-        Continue;
-
-      //Creates the virtual property implementation
-      LExposedProperty := TExposedPropertyImplementation.Create(
-        APythonType, LRttiProperty.Name, APyDelphiWrapper, APythonType, LRttiType);
-
-      //Give the client code an option to change any def
-      if Assigned(ADefCallback) and not ADefCallback(LRttiProperty.Name, LExposedProperty) then begin
-        //If client code disagrees, we remove the exposed property
-        FreeAndNil(LExposedProperty);
-        //Only register the property to the Python side if we really want to.
-        //In this case, we won't.
-        Continue;
-      end;
-
-      //Feed the buffer
-      SetLength(LBuffer, Length(LBuffer) + 1);
-      LBuffer[Length(LBuffer) - 1] := LRttiProperty.Name;
-
-      //Build the DocStr
-      LExposedProperty.DocString := AnsiString(
-        TExposedMemberDocStringsBuilder.BuildDocs(LRttiProperty));
-
-      //Adds the Python attribute
-      APythonType.AddGetSet(
-        PAnsiChar(LExposedProperty.Name),
-        LExposedProperty.VirtualGetImplementation(),
-        LExposedProperty.VirtualSetImplementation(),
-        PAnsiChar(LExposedProperty.DocString),
-        nil);
-    end;
-  finally
-    LRttiCtx.Free;
-  end;
-end;
-
-class procedure TPyDelphiObject.ExposeIndexedProperties(const AClass: TClass;
-  const APythonType: TPythonType; const APyDelphiWrapper: TPyDelphiWrapper;
-  const ADeclaredPropertiesOnly: boolean = false;
-  const AIncludedPropertyNames: TArray<string> = [];
-  const AExcludedPropertyNames: TArray<string> = [];
-  const ADefCallback: TExposedIndexedPropertyDefCallback = nil);
-var
-  LRttiCtx: TRttiContext;
-  LRttiType: TRttiType;
-  LRttiProperties: TArray<TRttiIndexedProperty>;
-  LRttiProperty: TRttiIndexedProperty;
-  LRttiElectedProperties: TArray<TRttiIndexedProperty>;
-  LBuffer: TArray<string>;
-  LExposedProperty: TExposedIndexedPropertyImplementation;
-begin
-  SetLength(LBuffer, 0);
-  LRttiCtx := TRttiContext.Create();
-  try
-    LRttiType := LRttiCtx.GetType(AClass);
-
-    //Define if we will expose only the declared properties or include all inherited
-    if ADeclaredPropertiesOnly then
-      LRttiProperties := LRttiType.GetDeclaredIndexedProperties()
-    else
-      LRttiProperties := LRttiType.GetIndexedProperties();
-
-    //Expose only the included properties
-    LRttiElectedProperties := TArray<TRttiIndexedProperty>.Create();
-    if Assigned(AIncludedPropertyNames) then begin
-      for LRttiProperty in LRttiProperties do
-        if MatchStr(LRttiProperty.Name, AIncludedPropertyNames) then
-          LRttiElectedProperties := LRttiElectedProperties + [LRttiProperty];
-    end else
-      LRttiElectedProperties := LRttiProperties;
-
-    for LRttiProperty in LRttiElectedProperties do begin
-      //Docs can be located in protected properties
-      if (Ord(LRttiProperty.Visibility) < Ord(TMemberVisibility.mvProtected)) then
-        Continue;
-
-      //Ignores excluded property
-      if MatchStr(LRttiProperty.Name, AExcludedPropertyNames) then
-        Continue;
-
-      //Ignores duplicated properties
-      if MatchStr(LRttiProperty.Name, LBuffer) then
-        Continue;
-
-      //Readable at least
-      if not LRttiProperty.IsReadable then
-        Continue;
-
-      if LRttiProperty.IsWritable then
-        LExposedProperty := TExposedIndexedPropertyImplementation.Create(
-          APythonType, LRttiProperty.Name, APyDelphiWrapper, APythonType, LRttiType)
-      else
-        LExposedProperty := TExposedIndexedPropertyReadOnlyImplementation.Create(
-          APythonType, LRttiProperty.Name, APyDelphiWrapper, APythonType, LRttiType);
-
-      //Give the client code an option to change any def
-      if Assigned(ADefCallback) and not ADefCallback(LRttiProperty.Name, LExposedProperty) then begin
-        //If client code disagrees, we remove the exposed property
-        FreeAndNil(LExposedProperty);
-        //Only register the property to the Python side if we really want to.
-        //In this case, we won't.
-        Continue;
-      end;
-
-      //Feed the buffer
-      SetLength(LBuffer, Length(LBuffer) + 1);
-      LBuffer[Length(LBuffer) - 1] := LRttiProperty.Name;
-
-      //Build the DocStr
-      LExposedProperty.DocString := AnsiString(
-        TExposedMemberDocStringsBuilder.BuildDocs(LRttiProperty));
-
-      //Adds the Python attribute
-      APythonType.AddGetSet(
-        PAnsiChar(LExposedProperty.Name),
-        LExposedProperty.VirtualMethodImplementation(),
-        nil,
-        PAnsiChar(LExposedProperty.DocString),
-        nil);
-    end;
-  finally
-    LRttiCtx.Free;
-  end;
-end;
-
-class procedure TPyDelphiObject.ExposeFields(const AClass: TClass;
-  const APythonType: TPythonType; const APyDelphiWrapper: TPyDelphiWrapper;
-  const ADeclaredFieldsOnly: boolean; const AIncludedFieldNames,
-  AExcludedFieldNames: TArray<string>; const ADefCallback: TExposedFieldDefCallback);
-var
-  LRttiCtx: TRttiContext;
-  LRttiType: TRttiType;
-  LRttiFields: TArray<TRttiField>;
+  LRttiType: TRttiStructuredType;
   LRttiField: TRttiField;
-  LRttiElectedFields: TArray<TRttiField>;
-  LBuffer: TArray<string>;
-  LExposedField: TExposedFieldImplementation;
+  AddedFields: TArray<string>;
+  LExposedField: TExposedField;
+  LClass: TClass;
+  LDocStr: string;
 begin
-  SetLength(LBuffer, 0);
   LRttiCtx := TRttiContext.Create();
   try
-    LRttiType := LRttiCtx.GetType(AClass);
+    LRttiType := LRttiCtx.GetType(AClass) as TRttiStructuredType;
 
-    //Define if we will expose only the declared fields or include all inherited
-    if ADeclaredFieldsOnly then
-      LRttiFields := LRttiType.GetDeclaredFields()
-    else
-      LRttiFields := LRttiType.GetFields();
-
-    //Expose only the included fields
-    LRttiElectedFields := TArray<TRttiField>.Create();
-    if Assigned(AIncludedFieldNames) then begin
-      for LRttiField in LRttiFields do
-        if MatchStr(LRttiField.Name, AIncludedFieldNames) then
-          LRttiElectedFields := LRttiElectedFields + [LRttiField];
-    end else
-      LRttiElectedFields := LRttiFields;
-
-    for LRttiField in LRttiElectedFields do begin
-      //Public and published fields only
+    AddedFields := [];
+    for LRttiField in LRttiType.GetFields do begin
+      // Ignore methods with visibility lower than public
       if (Ord(LRttiField.Visibility) < Ord(TMemberVisibility.mvPublic)) then
         Continue;
 
-      //Ignores excluded field
+      // Skip methods declared in NearestAncestorClass and its ancestors
+      LClass := (LRttiField.Parent as TRttiInstanceType).MetaclassType;
+      if (NearestAncestorClass <> nil) and ((LClass = NearestAncestorClass) or
+        not (LClass.InheritsFrom(NearestAncestorClass)))
+      then
+        Continue;
+
+      // Ignore excluded fields
       if MatchStr(LRttiField.Name, AExcludedFieldNames) then
         Continue;
 
-      //Ignores duplicated fields
-      if MatchStr(LRttiField.Name, LBuffer) then
+      // Ignore duplicate fields
+      if MatchStr(LRttiField.Name, AddedFields) then
         Continue;
 
-      //Creates the virtual field implementation
-      LExposedField := TExposedFieldImplementation.Create(
-        APythonType, LRttiField.Name, APyDelphiWrapper, APythonType, LRttiType);
-
-      //Give the client code an option to change any def
-      if Assigned(ADefCallback) and not ADefCallback(LRttiField.Name, LExposedField) then begin
-        //If client code disagrees, we remove the exposed field
-        FreeAndNil(LExposedField);
-        //Only register the field to the Python side if we really want to.
-        //In this case, we won't.
+      // Skip if the FieldType is missing
+      if LRttiField.FieldType = nil then
         Continue;
-      end;
 
-      //Feed the buffer
-      SetLength(LBuffer, Length(LBuffer) + 1);
-      LBuffer[Length(LBuffer) - 1] := LRttiField.Name;
+      // Skip if the type cannot be handled
+      if LRttiField.FieldType.TypeKind  in [tkUnknown, tkMethod, tkPointer, tkProcedure] then
+        Continue;
 
-      //Build the DocStr
-      LExposedField.DocString := AnsiString(
-        TExposedMemberDocStringsBuilder.BuildDocs(LRttiField));
+      AddedFields := AddedFields + [LRttiField.Name];
 
-      //Adds the Python attribute
+      // Create the exposed method
+      LExposedField := TExposedField.Create(LRttiField,
+        APyDelphiWrapper, APythonType, LRttiType);
+
+      //Try to load the method doc string from doc server
+      if Assigned(PyDocServer) and PyDocServer.Initialized and
+        PyDocServer.ReadMemberDocStr(LRttiField, LDocStr)
+      then
+        LExposedField.DocString := AnsiString(LDocStr);
+
+      // Keep it alive until the Wrapper is Finalized
+      APyDelphiWrapper.fExposedMembers.Add(LExposedField);
+
+      //Adds the Python getset
       APythonType.AddGetSet(
         PAnsiChar(LExposedField.Name),
-        LExposedField.VirtualGetImplementation(),
-        LExposedField.VirtualSetImplementation(),
+        LExposedField.GetterCallback,
+        LExposedField.SetterCallback,
         PAnsiChar(LExposedField.DocString),
         nil);
     end;
@@ -4490,38 +4206,259 @@ begin
   end;
 end;
 
-class procedure TPyDelphiObject.DynamicallyExposeMembers(
-  const APythonType: TPythonType; const APyDelphiWrapper: TPyDelphiWrapper);
+class procedure TPyDelphiObject.ExposeProperties(AClass: TClass;
+  NearestAncestorClass: TClass; APythonType: TPythonType;
+  APyDelphiWrapper: TPyDelphiWrapper; AExcludedPropertyNames: TArray<string>);
 var
+  LRttiCtx: TRttiContext;
+  LRttiType: TRttiStructuredType;
+  LRttiProperty: TRttiProperty;
+  AddedProperties: TArray<string>;
+  LExposedProperty: TExposedGetSet;
+  LClass: TClass;
+  LSetter: Pointer;
   LDocStr: string;
-  LExcludedMethods: TArray<string>;
-  LExcludedGettersAndSetters: TArray<string>;
-  LDelphiObjectClass: TClass;
 begin
-  APythonType.TypeFlags := APythonType.TypeFlags + [TPFlag.tpTypeSubclass];
+  LRttiCtx := TRttiContext.Create();
+  try
+    LRttiType := LRttiCtx.GetType(AClass) as TRttiStructuredType;
 
-  LDelphiObjectClass := TPyDelphiObjectClass(APythonType.PyObjectClass).DelphiObjectClass;
+    AddedProperties := [];
+    for LRttiProperty in LRttiType.GetProperties do begin
+      // Ignore methods with visibility lower than public
+      if (Ord(LRttiProperty.Visibility) < Ord(TMemberVisibility.mvPublic)) then
+        Continue;
 
-  //Try to load the class doc string from doc server
-  if TPythonDocServer.Instance.ReadTypeDocStr(LDelphiObjectClass.ClassInfo, LDocStr) then
-    APythonType.DocString.Text := LDocStr;
+      // Skip methods declared in NearestAncestorClass and its ancestors
+      LClass := (LRttiProperty.Parent as TRttiInstanceType).MetaclassType;
+      if (NearestAncestorClass <> nil) and ((LClass = NearestAncestorClass) or
+        not (LClass.InheritsFrom(NearestAncestorClass)))
+      then
+        Continue;
 
-  //Get excluded methods manually wrapped
-  LExcludedMethods := GetExcludedExposeMethods(APythonType);
-  //Get excluded fields, porperties and indexed properties manually wrapped
-  LExcludedGettersAndSetters := GetExcludedExposeGettersSetters(APythonType);
+      // Ignore excluded properties
+      if MatchStr(LRttiProperty.Name, AExcludedPropertyNames) then
+        Continue;
 
-  ExposeMethods(LDelphiObjectClass, APythonType, APyDelphiWrapper, true,
-    [], LExcludedMethods);
-  ExposeFields(LDelphiObjectClass, APythonType, APyDelphiWrapper, true,
-    [], LExcludedGettersAndSetters);
-  ExposeProperties(LDelphiObjectClass, APythonType, APyDelphiWrapper, true,
-    [], LExcludedGettersAndSetters);
-  ExposeIndexedProperties(LDelphiObjectClass, APythonType, APyDelphiWrapper, true,
-    [], LExcludedGettersAndSetters);
+      // Ignore duplicate properties
+      if MatchStr(LRttiProperty.Name, AddedProperties) then
+        Continue;
+
+      // Skip if the PropertyType is missing
+      if LRttiProperty.PropertyType = nil then
+        Continue;
+
+      // Skip non readable properties
+      if not LRttiProperty.IsReadable then
+        Continue;
+
+      if (LRttiProperty.PropertyType is TRttiMethodType) and
+        (LRttiProperty.Visibility = TMemberVisibility.mvPublished) and
+        (APyDelphiWrapper.EventHandlers.FindHandler(LRttiProperty.PropertyType.Handle) = nil)
+      then
+        LExposedProperty := TExposedEvent.Create(LRttiProperty,
+        APyDelphiWrapper, APythonType, LRttiType)
+      else
+      begin
+        // Skip if the type cannot be handled
+        if LRttiProperty.PropertyType.TypeKind in [tkUnknown, tkPointer, tkMethod, tkProcedure] then
+          Continue;
+
+        // Create the exposed property
+        LExposedProperty := TExposedProperty.Create(LRttiProperty,
+          APyDelphiWrapper, APythonType, LRttiType);
+      end;
+
+      AddedProperties := AddedProperties + [LRttiProperty.Name];
+
+      //Try to load the method doc string from doc server
+      if Assigned(PyDocServer) and PyDocServer.Initialized and
+        PyDocServer.ReadMemberDocStr(LRttiProperty, LDocStr)
+      then
+        LExposedProperty.DocString := AnsiString(LDocStr);
+
+      // Keep it alive until the Wrapper is Finalized
+      APyDelphiWrapper.fExposedMembers.Add(LExposedProperty);
+
+      if LRttiProperty.IsWritable then
+        LSetter := LExposedProperty.SetterCallback
+      else
+        LSetter := nil;
+
+      //Adds the Python getset
+      APythonType.AddGetSet(
+        PAnsiChar(LExposedProperty.Name),
+        LExposedProperty.GetterCallback,
+        LSetter,
+        PAnsiChar(LExposedProperty.DocString),
+        nil);
+    end;
+  finally
+    LRttiCtx.Free;
+  end;
 end;
 
-{$ENDIF EXPOSE_MEMBERS}
+class procedure TPyDelphiObject.ExposeIndexedProperties(AClass: TClass;
+  NearestAncestorClass: TClass; APythonType: TPythonType;
+  APyDelphiWrapper: TPyDelphiWrapper; AExcludedPropertyNames: TArray<string>);
+var
+  LRttiCtx: TRttiContext;
+  LRttiType: TRttiStructuredType;
+  LRttiProperty: TRttiIndexedProperty;
+  AddedProperties: TArray<string>;
+  LExposedProperty: TExposedIndexedProperty;
+  LClass: TClass;
+  LDocStr: string;
+begin
+  LRttiCtx := TRttiContext.Create();
+  APythonType.Tag := 0;  // may be assigned a default indexed property
+  try
+    LRttiType := LRttiCtx.GetType(AClass) as TRttiStructuredType;
+
+    AddedProperties := [];
+    for LRttiProperty in LRttiType.GetIndexedProperties do begin
+      // Ignore methods with visibility lower than public
+      if (Ord(LRttiProperty.Visibility) < Ord(TMemberVisibility.mvPublic)) then
+        Continue;
+
+      // Skip methods declared in NearestAncestorClass and its ancestors
+      LClass := (LRttiProperty.Parent as TRttiInstanceType).MetaclassType;
+      if (NearestAncestorClass <> nil) and ((LClass = NearestAncestorClass) or
+        not (LClass.InheritsFrom(NearestAncestorClass)))
+      then
+        Continue;
+
+      // Ignore excluded properties
+      if MatchStr(LRttiProperty.Name, AExcludedPropertyNames) then
+        Continue;
+
+      // Ignore duplicate properties
+      if MatchStr(LRttiProperty.Name, AddedProperties) then
+        Continue;
+
+      // Skip if the PropertyType is missing
+      if LRttiProperty.PropertyType = nil then
+        Continue;
+
+      // Skip non readable properties
+      if not LRttiProperty.IsReadable then
+        Continue;
+
+      // Skip if the type cannot be handled
+      if LRttiProperty.PropertyType.TypeKind  in [tkUnknown, tkPointer, tkMethod, tkProcedure] then
+        Continue;
+
+      AddedProperties := AddedProperties + [LRttiProperty.Name];
+
+      // Create the exposed method
+      LExposedProperty := TExposedIndexedProperty.Create(LRttiProperty,
+        APyDelphiWrapper, APythonType, LRttiType);
+
+      //Try to load the method doc string from doc server
+      if Assigned(PyDocServer) and PyDocServer.Initialized and
+        PyDocServer.ReadMemberDocStr(LRttiProperty, LDocStr)
+      then
+        LExposedProperty.DocString := AnsiString(LDocStr);
+
+      // Keep it alive until the Wrapper is Finalized
+      APyDelphiWrapper.fExposedMembers.Add(LExposedProperty);
+
+      //Adds the Python getset
+      APythonType.AddGetSet(
+        PAnsiChar(LExposedProperty.Name),
+        LExposedProperty.GetterCallback,
+        nil,
+        PAnsiChar(LExposedProperty.DocString),
+        nil);
+
+      // Store the default property in the type
+      if LRttiProperty.IsDefault and (APythonType.Tag = 0) then
+      begin
+        APythonType.Tag := NativeInt(LRttiProperty);
+        if LRttiProperty.IsWritable then
+          APythonType.Services.Mapping := [msSubscript, msAssSubscript]
+        else
+          APythonType.Services.Mapping := [msSubscript];
+      end;
+    end;
+  finally
+    LRttiCtx.Free;
+  end;
+end;
+
+function TPyDelphiObject.MpSubscript(obj: PPyObject) : PPyObject;
+var
+  PyArgs: PPyObject;
+  Prop: TRttiIndexedProperty;
+begin
+  Assert(PythonType.Tag <> 0);
+  Prop := TRttiIndexedProperty(PythonType.Tag);
+
+  // obj is a tuple only if we have more than one arguments
+  if PyDelphiWrapper.Engine.PyTuple_Check(obj) then
+    PyArgs := obj
+  else
+    PyArgs := PyDelphiWrapper.Engine.MakePyTuple([obj]);
+
+  Result := RttiCall(DelphiObject, PyDelphiWrapper, Prop.ReadMethod,
+    PyArgs, nil);
+
+  if not PyDelphiWrapper.Engine.PyTuple_Check(obj) then
+    PyDelphiWrapper.Engine.Py_DECREF(PyArgs); // release created tuple
+end;
+
+function TPyDelphiObject.MpAssSubscript(obj1, obj2: PPyObject) : Integer;
+var
+  Engine: TPythonEngine;
+  Prop: TRttiIndexedProperty;
+  PyArgs: PPyObject;
+  TempPy: PPyObject;
+  Count, Index: Integer;
+begin
+  Result := -1; // Signals failure
+
+  Assert(PythonType.Tag <> 0);
+  Prop := TRttiIndexedProperty(PythonType.Tag);
+
+  Engine := PyDelphiWrapper.Engine;
+  if not Prop.IsWritable then
+  begin
+    with Engine do
+      PyErr_SetObject(PyExc_TypeError^, PyUnicodeFromString(rs_NotWritable));
+    Exit;
+  end;
+
+  // obj is a tuple only if we have more than one arguments
+  if Engine.PyTuple_Check(obj1) then
+  begin
+    Count := Engine.PyTuple_Size(obj1);
+    PyArgs := Engine.PyTuple_New(Count + 1);
+    for Index := 0 to Count - 1 do
+    begin
+      TempPy := Engine.PyTuple_GetItem(obj1, Index);
+      Engine.Py_XINCREF(TempPy);
+      Engine.PyTuple_SetItem(PyArgs, Index, TempPy);
+    end;
+    Engine.Py_XINCREF(obj2);
+    Engine.PyTuple_SetItem(PyArgs, Count, obj2);
+  end
+  else
+    PyArgs := Engine.MakePyTuple([obj1, obj2]);
+
+  TempPy := RttiCall(DelphiObject, PyDelphiWrapper, Prop.WriteMethod,
+    PyArgs, nil);
+
+  Engine.Py_DECREF(PyArgs);  // release created tuple
+
+  if TempPy <> nil then
+  begin
+    Engine.Py_DECREF(TempPy);  //Should be Py_None
+    Result := 0; // Signal success
+  end;
+end;
+
+
+{$ENDIF EXTENDED_RTTI}
 
 function TPyDelphiObject.Set_Owned(AValue: PPyObject;
   AContext: Pointer): Integer;
@@ -4676,7 +4613,7 @@ end;
 {$IFDEF EXTENDED_RTTI}
 function TPyDelphiMethodObject.Call(ob1, ob2: PPyObject): PPyObject;
 begin
-  Result := RttiCall(ParentAddress, PythonType, fDelphiWrapper, MethName, ParentRtti, ob1, ob2);
+  Result := RttiCall(ParentAddress, fDelphiWrapper, MethName, ParentRtti, ob1, ob2);
 end;
 
 {$ELSE)}
@@ -4716,6 +4653,8 @@ begin
 end;
 {$ENDIF}
 
+{ TPyDelphiMethodObject }
+
 function TPyDelphiMethodObject.Repr: PPyObject;
 begin
   with GetPythonEngine do
@@ -4741,6 +4680,29 @@ begin
 end;
 
 {$ENDIF}
+
+
+{ TPyClassWrapper<T> }
+
+class function TPyClassWrapper<T>.DelphiObjectClass: TClass;
+begin
+  Result := T;
+end;
+
+function TPyClassWrapper<T>.GetDelphiObject: T;
+begin
+  Result := T(inherited DelphiObject)
+end;
+
+class procedure TPyClassWrapper<T>.RegisterMethods(PythonType: TPythonType);
+begin
+  // Do not call inherited;
+end;
+
+procedure TPyClassWrapper<T>.SetDelphiObject(const Value: T);
+begin
+  inherited DelphiObject := Value;
+end;
 
 { TPyDelphiVarParameter }
 
@@ -4838,7 +4800,7 @@ end;
 
 { TEventHandler }
 
-constructor TEventHandler.Create(PyDelphiWrapper : TPyDelphiWrapper;
+constructor TBaseEventHandler.Create(PyDelphiWrapper : TPyDelphiWrapper;
   Component: TObject; PropertyInfo: PPropInfo; Callable: PPyObject);
 var
   _FreeNotification : IFreeNotification;
@@ -4858,7 +4820,7 @@ begin
     (Component as TComponent).FreeNotification(PyDelphiWrapper);
 end;
 
-destructor TEventHandler.Destroy;
+destructor TBaseEventHandler.Destroy;
 var
   Method : TMethod;
 begin
@@ -4881,7 +4843,7 @@ begin
   inherited;
 end;
 
-procedure TEventHandler.Unsubscribe;
+procedure TBaseEventHandler.Unsubscribe;
 var
   _FreeNotification : IFreeNotification;
 begin
@@ -4914,7 +4876,7 @@ end;
 
 { TEventHandlers }
 
-function TEventHandlers.Add(AEventHandler: TEventHandler) : Boolean;
+function TEventHandlers.Add(AEventHandler: TBaseEventHandler) : Boolean;
 begin
   fItems.Add(AEventHandler);
   Result := True;
@@ -4990,9 +4952,9 @@ begin
   Result := fItems.Count;
 end;
 
-function TEventHandlers.GetItem(AIndex: Integer): TEventHandler;
+function TEventHandlers.GetItem(AIndex: Integer): TBaseEventHandler;
 begin
-  Result := TEventHandler(fItems[AIndex]);
+  Result := TBaseEventHandler(fItems[AIndex]);
 end;
 
 function TEventHandlers.GetRegisteredClass(
@@ -5130,6 +5092,7 @@ begin
   fClassRegister := TObjectList.Create(True);
   fHelperClassRegister := TStringList.Create;
   fEventHandlerList := TEventHandlers.Create(Self);
+  fExposedMembers := TObjectList.Create(True);
 
   if not (csDesigning in ComponentState) then
     CreateWrappers;
@@ -5227,22 +5190,19 @@ procedure TPyDelphiWrapper.CreateWrappers;
 var
   i : Integer;
 begin
-  {$IFDEF EXPOSE_MEMBERS}
-  //Bufferize the doc strings from XML
-  TPythonDocServer.Instance.Bufferize();
-  {$ENDIF EXPOSE_MEMBERS}
-
   // Helper Types
 {$IFNDEF FPC}
   fDelphiMethodType := RegisterHelperType(TPyDelphiMethodObject);
 {$ENDIF}
   fDefaultIterType      := RegisterHelperType(TPyDelphiIterator);
   fDefaultContainerType := RegisterHelperType(TPyDelphiContainer);
-  FDefaultMappingType   := RegisterHelperType(TPyDelphiMapping);
   fVarParamType         := RegisterHelperType(TPyDelphiVarParameter);
 {$IFDEF EXTENDED_RTTI}
+  if Assigned(PyDocServer) then
+    PyDocServer.Initialize;
   fRecordType           := RegisterHelperType(TPyPascalRecord);
   fInterfaceType        := RegisterHelperType(TPyPascalInterface);
+  RegisterHelperType(TPyIndexedProperty);
 {$ENDIF}
 
   // Create and Register Wrapper for TObject
@@ -5254,11 +5214,10 @@ begin
   // Register wrappers for each Delphi unit
   for i := 0 to RegisteredUnits.Count-1 do
     RegisteredUnits[i].RegisterWrappers(Self);
-
-  {$IFDEF EXPOSE_MEMBERS}
-  //Clear all allocated memory to read the docs
-  TPythonDocServer.Instance.ClearBuffer();
-  {$ENDIF EXPOSE_MEMBERS}
+{$IFDEF EXTENDED_RTTI}
+  if Assigned(PyDocServer) then
+    PyDocServer.Finalize;
+{$ENDIF}
 end;
 
 procedure TPyDelphiWrapper.DefineVar(const AName: string; const AValue: Variant);
@@ -5272,12 +5231,13 @@ begin
   Engine.Py_DECREF(_obj);
 end;
 
-procedure TPyDelphiWrapper.DefineVar(const AName: string; AValue: TObject);
+procedure TPyDelphiWrapper.DefineVar(const AName: string; AValue: TObject;
+  AOwnership: TObjectOwnership);
 var
   _obj : PPyObject;
 begin
   Assert(Assigned(Module));
-  _obj := Wrap(AValue);
+  _obj := Wrap(AValue, AOwnership);
   Module.SetVar(AnsiString(AName), _obj);
   Engine.Py_DECREF(_obj);
 end;
@@ -5294,6 +5254,7 @@ end;
 
 destructor TPyDelphiWrapper.Destroy;
 begin
+  if Initialized then Finalize;
   UnsubscribeFreeNotifications;
   // note that those pointers MUST be set to nil, otherwise it will crash
   // when calling inherited, as we have overridden SetEngine that tries to
@@ -5301,6 +5262,7 @@ begin
   FreeAndNil(fClassRegister);
   FreeAndNil(fHelperClassRegister);
   FreeAndNil(fEventHandlerList);
+  FreeAndNil(fExposedMembers);
   Module := nil;
 
   //No need to free PythonType objects since they are owned;
@@ -5313,6 +5275,7 @@ begin
   UnsubscribeFreeNotifications;
   if Assigned(fEventHandlerList) then
     fEventHandlerList.Clear;
+  fExposedMembers.Clear;
 end;
 
 function TPyDelphiWrapper.GetHelperType(const TypeName: string): TPythonType;
@@ -5383,11 +5346,10 @@ begin
         fEventHandlerList.Delete(i);
 end;
 
-procedure TPyDelphiWrapper.RegisterDelphiWrapper(
-  AWrapperClass: TPyDelphiObjectClass);
+function TPyDelphiWrapper.RegisterDelphiWrapper(
+  AWrapperClass: TPyDelphiObjectClass): TPythonType;
 var
   RegisteredClass : TRegisteredClass;
-  Index: Integer;
 begin
   Assert(Assigned(AWrapperClass));
 
@@ -5397,22 +5359,9 @@ begin
   RegisteredClass.PythonType.Engine := Engine;
   RegisteredClass.PythonType.Module := fModule;
   RegisteredClass.PythonType.PyObjectClass := AWrapperClass;
-
-  {$IFDEF EXPOSE_MEMBERS}
-  //Must run after manually wrapped members
-  TPyDelphiObject.DynamicallyExposeMembers(RegisteredClass.PythonType, Self);
-  {$ENDIF EXPOSE_MEMBERS}
-
-  // Find nearest registered parent class and set it as base
-  for Index := fClassRegister.Count - 1 downto 0 do
-    with TRegisteredClass(fClassRegister[Index]) do
-      if RegisteredClass.DelphiClass.InheritsFrom(DelphiClass) then
-      begin
-        RegisteredClass.PythonType.BaseType := PythonType;
-        Break;
-      end;
-
   fClassRegister.Add(RegisteredClass);
+  Result := RegisteredClass.PythonType;
+
   if AWrapperClass.DelphiObjectClass.InheritsFrom(TPersistent) then
     Classes.RegisterClass(TPersistentClass(AWrapperClass.DelphiObjectClass));
 end;
@@ -5581,54 +5530,70 @@ begin
   end;
 end;
 
-function TPyDelphiWrapper.WrapRecord(const AValue: TValue; const ACopy: boolean): PPyObject;
+function TPyDelphiWrapper.WrapRecord(const AValue: TValue): PPyObject;
 var
   LPythonType: TPythonType;
 begin
   CheckEngine();
 
   if AValue.IsEmpty then begin
-    Result := Engine.ReturnNone();
+    Result := Engine.ReturnNone;
     Exit;
   end;
 
   LPythonType := GetHelperType('PascalRecordType');
   if not Assigned(LPythonType) or not (AValue.Kind in [tkRecord{$IFDEF MANAGED_RECORD}, tkMRecord{$ENDIF}]) then
   begin
-    Result := Engine.ReturnNone();
+    Result := Engine.ReturnNone;
     Exit;
   end;
 
   Result := LPythonType.CreateInstance();
   with PythonToDelphi(Result) as TPyPascalRecord do begin
-    SetValueAndType(AValue, ACopy);
+    SetupFromTValue(AValue);
     PyDelphiWrapper := Self;
   end;
 end;
 
-function TPyDelphiWrapper.WrapInterface(const IValue: TValue; const ACopy: boolean): PPyObject;
+function TPyDelphiWrapper.WrapInterface(const IValue: TValue): PPyObject;
 var
   LPythonType: TPythonType;
 begin
-  CheckEngine();
+  CheckEngine;
 
   if IValue.IsEmpty then begin
-    Result := Engine.ReturnNone();
+    Result := Engine.ReturnNone;
     Exit;
   end;
 
   LPythonType := GetHelperType('PascalInterfaceType');
   if not Assigned(LPythonType) or (IValue.Kind <> tkInterface) then
   begin
-    Result := Engine.ReturnNone();
+    Result := Engine.ReturnNone;
     Exit;
   end;
 
-  Result := LPythonType.CreateInstance();
+  Result := LPythonType.CreateInstance;
   with PythonToDelphi(Result) as TPyPascalInterface do begin
-    SetValueAndType(IValue, ACopy);
+    SetupFromTValue(IValue);
     PyDelphiWrapper := Self;
   end;
+end;
+
+procedure TPyDelphiWrapper.DefineVar(const AName: string; AValue: TValue);
+var
+  _obj : PPyObject;
+  ErrMsg: string;
+begin
+  Assert(Assigned(Module));
+  _obj := TValueToPyObject(AValue, Self, ErrMsg);
+  if Assigned(_obj) then
+  begin
+    Module.SetVar(AnsiString(AName), _obj);
+    Engine.Py_DECREF(_obj);
+  end
+  else
+    raise Exception.Create(ErrMsg);
 end;
 
 // To keep the RTTI Pool alive and avoid continuously creating/destroying it

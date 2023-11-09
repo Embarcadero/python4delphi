@@ -15,7 +15,8 @@ uses
   Xml.xmldom,
   Xml.XMLIntf,
   Xml.XMLDoc,
-  Xml.omnixmldom;
+  Xml.omnixmldom,
+  WrapDelphi;
 
 type
   TSymbol = string;
@@ -38,29 +39,52 @@ type
       const ADeclaringUnitName: string): TDocScanResult;
   end;
 
-  TPythonDocServer = class
+  ITypeAnnotationProvider = interface
+    ['{7359C6AE-8C5C-4279-9151-A847D1383A11}']
+    /// <summary>
+    ///   Creates member annotation for type inference in doc. strings.
+    /// </summary>
+    function CreateTypeAnnotation(const ARttiMember: TRttiMember): string;
+  end;
+
+  TPythonDocServer = class(TInterfacedObject, IDocServer)
   private
-    class var FInstance: TPythonDocServer;
-    const DOC_DIR_NAME = 'doc';
-    const DOC_FILE_NAME = 'docs.xml';
-  private
-    FProvider: IPythonDocProvider;
+    FDocProvider: IPythonDocProvider;
+    FTypeAnnotationProvider: ITypeAnnotationProvider;
+    FBuffered: boolean;
+    function GetDocDir(): string;
+    function GetDocFile(): string;
+    /// <summary>
+    ///   Create member annotation for stubs generation.
+    /// </summary>
+    function CreateMemberAnnotation(const ARttiMember: TRttiMember): string;
+    /// <summary>
+    ///   Create member docs based on parent class or its descendents.
+    /// </summary>
+    function CreateMemberDocStr(const AParentInfo: PTypeInfo;
+      const ARttiMember: TRttiMember): string;
+    /// <summary>
+    ///   Combine docstring and type annotation.
+    /// </summary>
+    function CombineDocStrAndTypeAnnotation(const ADocString, ATypeAnnotation: string): string; overload;
+    /// <summary>
+    ///   Combine  doc. strings and type annotation.
+    /// </summary>
+    function CombineDocStrAndTypeAnnotation(const ARttiMember: TRttiMember): string; overload;
+  public
     constructor Create();
-    class function GetInstance: TPythonDocServer; static;
-    class function GetDocDir(): string; static;
-    class function GetDocFile(): string; static;
-  public
-    class destructor Destroy();
-  public
     /// <summary>
     ///   Bufferize all symbols.
     /// </summary>
-    procedure Bufferize();
+    procedure Initialize;
     /// <summary>
-    ///    Clear all symbol info off buffer.
+    ///   Check if symbols have been bufferized.
     /// </summary>
-    procedure ClearBuffer();
-
+    function Initialized: Boolean;
+    /// <summary>
+    ///    Clear all symbols info from buffer.
+    /// </summary>
+    procedure Finalize;
     /// <summary>
     ///    Reads the docs of a symbol.
     /// </summary>
@@ -70,26 +94,21 @@ type
     /// <summary>
     ///    Reads the docs of a type.
     /// </summary>
-    function ReadTypeDocStr(const ATypeInfo: PTypeInfo; out ADocStr: string): boolean; overload;
-    /// <summary>
-    ///    Reads the docs of a type.
-    /// </summary>
-    function ReadTypeDocStr<T>(out ADocStr: string): boolean; overload;
-
+    function ReadTypeDocStr(ATypeInfo: PTypeInfo; out ADocStr: string): boolean; overload;
     /// <summary>
     ///    Reads the docs of a member of a type.
     /// </summary>
-    function ReadMemberDocStr(const AParent: PTypeInfo; const AMember: TRttiMember; out ADocStr: string): boolean; overload;
+    function ReadMemberDocStr(AParentInfo: PTypeInfo; AMember: TRttiMember;
+      out ADocStr: string): boolean; overload;
     /// <summary>
     ///    Reads the docs of a member of a type.
     /// </summary>
-    function ReadMemberDocStr<T>(const AMember: TRttiMember; out ADocStr: string): boolean; overload;
+    function ReadMemberDocStr(AMember: TRttiMember; out ADocStr: string): boolean; overload;
     /// <summary>
     ///    Doc provider instance.
     /// </summary>
-    property Provider: IPythonDocProvider read FProvider write FProvider;
-
-    class property Instance: TPythonDocServer read GetInstance;
+    property DocProvider: IPythonDocProvider read FDocProvider write FDocProvider;
+    property TypeAnnotationProvider: ITypeAnnotationProvider read FTypeAnnotationProvider write FTypeAnnotationProvider;
   end;
 
   TPythonDocXML = class(TInterfacedObject, IPythonDocProvider)
@@ -127,6 +146,45 @@ type
     class procedure ClearBuffer();
   end;
 
+  /// <summary>
+  ///   Using standard function signature for methods.
+  ///   Signature is a string of the format
+  ///     <function_name>(<signature>) -> <return type>
+  ///   or perhaps without the return type.
+
+  ///   Using Google Docstrings Style for fields and properties. It is a string of the format
+  ///     <type: docstring>
+  ///   See: https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html
+  /// </summary>
+  TMyPyTypeAnnotation = class(TInterfacedObject, ITypeAnnotationProvider)
+  private
+    function TranslateType(const ARttiObject: TRttiObject): string;
+    /// <summary>
+    ///   Creates method annotation for type inference in doc. strings.
+    /// </summary>
+    function GetMethodTypeAnnotation(
+      const ARttiMethod: TRttiMethod): string;
+    /// <summary>
+    ///   Creates field annotation for type inference in doc. strings.
+    /// </summary>
+    function GetFieldTypeAnnotation(const ARttiField: TRttiField): string;
+    /// <summary>
+    ///   Creates property annotation for type inference in doc. strings.
+    /// </summary>
+    function GetPropertyTypeAnnotation(
+      const ARttiProperty: TRttiProperty): string;
+    /// <summary>
+    ///   Creates indexed property annotation for type inference in doc. strings.
+    /// </summary>
+    function GetIndexedPropertyTypeAnnotation(
+      const ARttiIndexedProperty: TRttiIndexedProperty): string;
+  public
+    /// <summary>
+    ///   Creates member annotation for type inference in doc. strings.
+    /// </summary>
+    function CreateTypeAnnotation(const ARttiMember: TRttiMember): string;
+  end;
+
   TDocScanResult = class(TDictionary<string, string>)
   public
     class function ExtractMemberPrefix(const AXmlMember: IXMLNode): string; overload; static; inline;
@@ -137,11 +195,153 @@ type
     class function BuildMemberIdentifier(const ASymbolName: string; const ASymbolType: TPythonDocSymbolType): string; overload; static; inline;
   end;
 
+const
+  DOC_DIR_NAME = 'doc';
+  DOC_FILE_NAME = 'docs.xml';
+
 implementation
 
 uses
   System.IOUtils,
   System.StrUtils;
+
+{ TPythonDocServer }
+
+constructor TPythonDocServer.Create;
+begin
+  inherited;
+  FDocProvider := TPythonDocXML.Create();
+  FTypeAnnotationProvider := TMyPyTypeAnnotation.Create();
+end;
+
+function TPythonDocServer.GetDocDir(): string;
+begin
+  {$IFDEF ANDROID}
+  Exit(TPath.GetDocumentsPath());
+  {$ENDIF ANDROID}
+
+  Result := TPath.Combine(
+    TDirectory.GetParent(ExcludeTrailingPathDelimiter(
+      ExtractFilePath(GetModuleName(HInstance)))), DOC_DIR_NAME);
+end;
+
+function TPythonDocServer.GetDocFile: string;
+begin
+  Result := TPath.Combine(GetDocDir(), DOC_FILE_NAME);
+end;
+
+procedure TPythonDocServer.Initialize;
+begin
+  TPythonDocXML.Bufferize(GetDocFile());
+  FBuffered := true;
+end;
+
+function TPythonDocServer.Initialized: Boolean;
+begin
+  Result := FBuffered;
+end;
+
+procedure TPythonDocServer.Finalize;
+begin
+  FBuffered := false;
+  TPythonDocXML.ClearBuffer();
+end;
+
+function TPythonDocServer.CreateMemberDocStr(
+  const AParentInfo: PTypeInfo; const ARttiMember: TRttiMember): string;
+begin
+  if not Assigned(AParentInfo) then
+    Exit(String.Empty);
+
+  if not ReadMemberDocStr(AParentInfo, ARttiMember, Result) then
+    if not Assigned(GetTypeData(AParentInfo)^.ParentInfo) then
+      Result := String.Empty
+    else
+      Result := CreateMemberDocStr(GetTypeData(AParentInfo)^.ParentInfo^, ARttiMember);
+end;
+
+function TPythonDocServer.CreateMemberAnnotation(
+  const ARttiMember: TRttiMember): string;
+begin
+  Result := FTypeAnnotationProvider.CreateTypeAnnotation(ARttiMember);
+end;
+
+function TPythonDocServer.CombineDocStrAndTypeAnnotation(const ADocString,
+  ATypeAnnotation: string): string;
+begin
+  //We only have the docstring or neither
+  if ATypeAnnotation.IsEmpty() then
+    Result := ADocString
+  //We only have the type annotation
+  else if ADocString.IsEmpty() then
+    Result := ATypeAnnotation
+  //We have both values
+  else
+    Result := ATypeAnnotation + ADocString;
+end;
+
+function TPythonDocServer.CombineDocStrAndTypeAnnotation(const ARttiMember: TRttiMember): string;
+begin
+  Result := CombineDocStrAndTypeAnnotation(
+    CreateMemberDocStr(ARttiMember.Parent.Handle, ARttiMember),
+    CreateMemberAnnotation(ARttiMember));
+end;
+
+function TPythonDocServer.ReadTypeDocStr(const ASymbolName: TSymbol;
+  const ASymbolType: TPythonDocSymbolType;
+  const ADeclaringUnitName: string; out ADocStr: string): boolean;
+var
+  LDocs: TDocScanResult;
+begin
+  LDocs := FDocProvider.Find(ASymbolName, ASymbolType, ADeclaringUnitName);
+  if not Assigned(LDocs) then
+    Exit(false);
+
+  Result := LDocs.TryGetValue(
+    TDocScanResult.BuildMemberIdentifier(ASymbolName, ASymbolType), ADocStr);
+end;
+
+function TPythonDocServer.ReadTypeDocStr(ATypeInfo: PTypeInfo;
+  out ADocStr: string): boolean;
+begin
+  case ATypeInfo^.Kind of
+    tkClass: Result := ReadTypeDocStr(TSymbol(ATypeInfo^.Name),
+      TPythonDocSymbolType.Class,
+      String(ATypeInfo^.TypeData^.UnitName), ADocStr);
+    //These docs will be enhanced as needed
+    else raise ENotSupportedException.Create('Type doesn''t support documentation.');
+  end;
+end;
+
+function TPythonDocServer.ReadMemberDocStr(AParentInfo: PTypeInfo;
+  AMember: TRttiMember; out ADocStr: string): boolean;
+var
+  LDocs: TDocScanResult;
+begin
+  case AParentInfo^.Kind of
+    tkClass: begin
+      LDocs := FDocProvider.Find(
+        TSymbol(AParentInfo^.Name),
+        TPythonDocSymbolType.Class,
+        String(AParentInfo^.TypeData^.UnitName));
+
+      if not Assigned(LDocs) then
+        Exit(false);
+
+      Result := LDocs.TryGetValue(
+        TDocScanResult.BuildMemberIdentifier(AMember), ADocStr);
+    end;
+    //These docs will be enhanced as needed
+    else raise ENotSupportedException.Create('Type doesn''t support documentation.');
+  end;
+end;
+
+function TPythonDocServer.ReadMemberDocStr(AMember: TRttiMember;
+  out ADocStr: string): boolean;
+begin
+  ADocStr := CombineDocStrAndTypeAnnotation(AMember);
+  Result := not ADocStr.IsEmpty;
+end;
 
 { TPythonDocXML }
 
@@ -171,7 +371,7 @@ begin
       if LSymbols.ContainsKey(ASymbolName) then
         Exit(LSymbols[ASymbolName]);
     //These docs will be enhanced as needed
-    else raise ENotSupportedException.Create('Type doesn''t supports documentation.');
+    else raise ENotSupportedException.Create('Type doesn''t support documentation.');
   end;
 
   Result := nil;
@@ -286,115 +486,6 @@ begin
   FDiscoveredFiles.Clear();
 end;
 
-{ TPythonDocServer }
-
-constructor TPythonDocServer.Create;
-begin
-  inherited;
-  FProvider := TPythonDocXML.Create();
-end;
-
-class destructor TPythonDocServer.Destroy;
-begin
-  FInstance.Free();
-end;
-
-class function TPythonDocServer.GetInstance: TPythonDocServer;
-begin
-  if not Assigned(FInstance) then
-    FInstance := TPythonDocServer.Create();
-  Result := FInstance;
-end;
-
-class function TPythonDocServer.GetDocDir(): string;
-begin
-  {$IFDEF ANDROID}
-  Exit(TPath.GetDocumentsPath());
-  {$ENDIF ANDROID}
-
-  {$IFDEF DEBUG}
-  Result := TPath.Combine(ExtractFilePath(
-    GetModuleName(HInstance)), DOC_DIR_NAME);
-  {$ELSE}
-  Result := TPath.Combine(
-    TDirectory.GetParent(ExcludeTrailingPathDelimiter(
-      ExtractFilePath(GetModuleName(HInstance)))), DOC_DIR_NAME);
-  {$ENDIF}
-end;
-
-class function TPythonDocServer.GetDocFile: string;
-begin
-  Result := TPath.Combine(TPythonDocServer.GetDocDir(), DOC_FILE_NAME);
-end;
-
-procedure TPythonDocServer.Bufferize;
-begin
-  TPythonDocXML.Bufferize(TPythonDocServer.GetDocFile());
-end;
-
-procedure TPythonDocServer.ClearBuffer;
-begin
-  TPythonDocXML.ClearBuffer();
-end;
-
-function TPythonDocServer.ReadTypeDocStr(const ASymbolName: TSymbol;
-  const ASymbolType: TPythonDocSymbolType;
-  const ADeclaringUnitName: string; out ADocStr: string): boolean;
-var
-  LDocs: TDocScanResult;
-begin
-  LDocs := FProvider.Find(ASymbolName, ASymbolType, ADeclaringUnitName);
-  if not Assigned(LDocs) then
-    Exit(false);
-
-  Result := LDocs.TryGetValue(
-    TDocScanResult.BuildMemberIdentifier(ASymbolName, ASymbolType), ADocStr);
-end;
-
-function TPythonDocServer.ReadTypeDocStr(const ATypeInfo: PTypeInfo;
-  out ADocStr: string): boolean;
-begin
-  case ATypeInfo^.Kind of
-    tkClass: Result := ReadTypeDocStr(TSymbol(ATypeInfo^.Name),
-      TPythonDocSymbolType.Class,
-      String(ATypeInfo^.TypeData^.UnitName), ADocStr);
-    //These docs will be enhanced as needed
-    else raise ENotSupportedException.Create('Type doesn''t supports documentation.');
-  end;
-end;
-
-function TPythonDocServer.ReadTypeDocStr<T>(out ADocStr: string): boolean;
-begin
-  Result := ReadTypeDocStr(TypeInfo(T), ADocStr);
-end;
-
-function TPythonDocServer.ReadMemberDocStr(const AParent: PTypeInfo;
-  const AMember: TRttiMember; out ADocStr: string): boolean;
-var
-  LDocs: TDocScanResult;
-begin
-  case AParent^.Kind of
-    tkClass: begin
-      LDocs := FProvider.Find(TSymbol(AParent^.Name), TPythonDocSymbolType.Class,
-        String(AParent^.TypeData^.UnitName));
-
-      if not Assigned(LDocs) then
-        Exit(false);
-
-      Result := LDocs.TryGetValue(
-        TDocScanResult.BuildMemberIdentifier(AMember), ADocStr);
-    end;
-    //These docs will be enhanced as needed
-    else raise ENotSupportedException.Create('Type doesn''t supports documentation.');
-  end;
-end;
-
-function TPythonDocServer.ReadMemberDocStr<T>(const AMember: TRttiMember;
-  out ADocStr: string): boolean;
-begin
-  Result := ReadMemberDocStr(TypeInfo(T), AMember, ADocStr);
-end;
-
 { TDocScanResult }
 
 class function TDocScanResult.BuildMemberIdentifier(
@@ -447,7 +538,9 @@ begin
   end else if ARttiNamedType is TRttiField then
     Result := 'field'
   else if ARttiNamedType is TRttiProperty then
-    Result := 'property';
+    Result := 'property'
+  else if ARttiNamedType is TRttiIndexedProperty then
+    Result := 'indexed_property';
 end;
 
 class function TDocScanResult.BuildMemberIdentifier(const ASymbolName: string;
@@ -475,6 +568,159 @@ begin
     TPythonDocSymbolType.Class:
       Result := 'class_' + ASymbolName;
   end;
+end;
+
+{ TMyPyTypeAnnotation }
+
+function TMyPyTypeAnnotation.TranslateType(
+  const ARttiObject: TRttiObject): string;
+
+  function TranslateMethod(const ARttiMethod: TRttiMethod): string;
+  const
+    METHOD_DOC_STR_PATTERN = 'Callable[[%s], %s]';
+  var
+    LParams: TArray<string>;
+    LParam: TRttiParameter;
+  begin
+    LParams := nil;
+    for LParam in ARttiMethod.GetParameters() do
+      LParams := LParams + [TranslateType(LParam.ParamType)];
+
+    Result := Format(METHOD_DOC_STR_PATTERN, [
+      String.Join(', ', LParams),
+      TranslateType(ARttiMethod.ReturnType)]);
+  end;
+
+  function TranslateInvokable(const ARttiInvokableType: TRttiInvokableType): string;
+  const
+    INVOKABLE_DOC_STR_PATTERN = 'Callable[[%s], %s]';
+  var
+    LParams: TArray<string>;
+    LParam: TRttiParameter;
+  begin
+    LParams := nil;
+    for LParam in ARttiInvokableType.GetParameters() do
+      LParams := LParams + [TranslateType(LParam.ParamType)];
+
+    Result := Format(INVOKABLE_DOC_STR_PATTERN, [
+      String.Join(', ', LParams),
+      TranslateType(ARttiInvokableType.ReturnType)]);
+  end;
+
+begin
+  if not Assigned(ARttiObject) then
+    Result := 'None'
+  else if PTypeInfo(TypeInfo(boolean)) = ARttiObject.Handle then
+    Result := 'bool'
+  else if ARttiObject.InheritsFrom(TRttiMethod) then
+    Result := TranslateMethod(ARttiObject as TRttiMethod)
+  else if ARttiObject.InheritsFrom(TRttiInvokableType) then
+    Result := TranslateInvokable(ARttiObject as TRttiInvokableType)
+  else if ARttiObject.InheritsFrom(TRttiType) then
+    case TRttiType(ARttiObject).TypeKind of
+      tkUnknown,
+      tkVariant,
+      tkSet, tkEnumeration,
+      tkClass, tkMethod, tkProcedure, tkClassRef, tkPointer,
+      tkRecord, tkMRecord,
+      tkInterface:
+        Result := TRttiType(ARttiObject).Name.Replace('T', '', []);
+      tkInteger, tkInt64:
+        Result := 'int';
+      tkChar:
+        Result := 'ansichr(bytes)';
+      tkWChar:
+        Result := 'unicodechr(str)';
+      tkFloat:
+        Result := 'float';
+      tkString, tkUString, tkWString:
+        Result := 'str';
+      tkLString:
+        Result := 'ansistr(bytes)';
+      tkArray, tkDynArray:
+        Result := 'tuple';
+    end;
+end;
+
+function TMyPyTypeAnnotation.GetMethodTypeAnnotation(
+  const ARttiMethod: TRttiMethod): string;
+const
+  METHOD_DOC_STR_PATTERN = '%s.%s(%s)';
+var
+  LArgsStr: string;
+  LRttiParameter: TRttiParameter;
+begin
+  if (Length(ARttiMethod.GetParameters) = 0) then
+    Exit(String.Empty);
+
+  LArgsStr := String.Empty;
+  for LRttiParameter in ARttiMethod.GetParameters do begin
+    if not LArgsStr.IsEmpty then
+      LArgsStr := LArgsStr + ', ';
+
+    if not Assigned(LRttiParameter.ParamType) then
+      LArgsStr := LArgsStr + LRttiParameter.Name
+    else
+      LArgsStr := LArgsStr
+        + LRttiParameter.Name
+        + ': '
+        + TranslateType(LRttiParameter.ParamType);
+  end;
+
+  Result := String.Format(METHOD_DOC_STR_PATTERN, [
+    ARttiMethod.Parent.Name, ARttiMethod.Name, LArgsStr]);
+
+  if Assigned(ARttiMethod.ReturnType) then
+    Result := Result
+      + ' -> '
+      + TranslateType(ARttiMethod.ReturnType)
+  else
+    Result := Result + ' -> None';
+
+  if not Result.IsEmpty() then
+    Result := Result + #10;
+end;
+
+function TMyPyTypeAnnotation.GetFieldTypeAnnotation(
+  const ARttiField: TRttiField): string;
+const
+  FIELD_DOC_STR_PATTERN = '%s: ';
+begin
+  Result := Format(FIELD_DOC_STR_PATTERN, [
+    TranslateType(TRttiField(ARttiField).FieldType)]);
+end;
+
+function TMyPyTypeAnnotation.GetPropertyTypeAnnotation(
+  const ARttiProperty: TRttiProperty): string;
+const
+  PROPERTY_DOC_STR_PATTERN = '%s: ';
+begin
+  Result := Format(PROPERTY_DOC_STR_PATTERN, [
+    TranslateType(ARttiProperty.PropertyType)]);
+end;
+
+function TMyPyTypeAnnotation.GetIndexedPropertyTypeAnnotation(
+  const ARttiIndexedProperty: TRttiIndexedProperty): string;
+const
+  INDEXED_PROPERTY_DOC_STR_PATTERN = '%s: ';
+begin
+  Result := Format(INDEXED_PROPERTY_DOC_STR_PATTERN, [
+    TranslateType(ARttiIndexedProperty.PropertyType)]);
+end;
+
+function TMyPyTypeAnnotation.CreateTypeAnnotation(
+  const ARttiMember: TRttiMember): string;
+begin
+  if ARttiMember.InheritsFrom(TRttiMethod) then
+    Result := GetMethodTypeAnnotation(TRttiMethod(ARttiMember))
+  else if ARttiMember.InheritsFrom(TRttiField) then
+    Result := GetFieldTypeAnnotation(TRttiField(ARttiMember))
+  else if ARttiMember.InheritsFrom(TRttiProperty) then
+    Result := GetPropertyTypeAnnotation(TRttiProperty(ARttiMember))
+  else if ARttiMember.InheritsFrom(TRttiIndexedProperty) then
+    Result := GetIndexedPropertyTypeAnnotation(TRttiIndexedProperty(ARttiMember))
+  else
+    Result := String.Empty;
 end;
 
 end.
