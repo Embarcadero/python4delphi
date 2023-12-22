@@ -1363,6 +1363,8 @@ type
     Py_NoSiteFlag: PInteger;
     Py_FrozenFlag: PInteger;
     Py_IgnoreEnvironmentFlag: PInteger;
+    Py_DontWriteBytecodeFlag: PInteger;
+    Py_IsolatedFlag: PInteger;
 
     PyImport_FrozenModules: PP_frozen;
 
@@ -1880,16 +1882,17 @@ end;
 //--------------------------------------------------------
 type
   TDatetimeConversionMode = (dcmToTuple, dcmToDatetime);
+  TPythonFlag = (pfDebug, pfInteractive, pfNoSite, pfOptimize, pfVerbose,
+                 pfFrozenFlag, pfIgnoreEnvironmentFlag,
+                 pfDontWriteBytecodeFlag, pfIsolatedFlag);
+  TPythonFlags = set of TPythonFlag;
 const
   DEFAULT_DATETIME_CONVERSION_MODE = dcmToTuple;
+  DEFAULT_FLAGS = {$IFNDEF IOS}[]{$ELSE}[pfDontWriteBytecodeFlag, pfIsolatedFlag]{$ENDIF};
 type
   TEngineClient = class;
   TPathInitializationEvent = procedure ( Sender : TObject; var Path : string ) of Object;
   TSysPathInitEvent = procedure ( Sender : TObject; PathList : PPyObject ) of Object;
-  TPythonFlag = (pfDebug, pfInteractive, pfNoSite, pfOptimize, pfVerbose,
-                 pfFrozenFlag, pfIgnoreEnvironmentFlag);
-  TPythonFlags = set of TPythonFlag;
-
 
   TTracebackItem = class
   public
@@ -2089,7 +2092,7 @@ type
     property InitScript: TStrings read FInitScript write SetInitScript;
     property InitThreads: Boolean read FInitThreads write SetInitThreads default False;
     property IO: TPythonInputOutput read FIO write SetIO;
-    property PyFlags: TPythonFlags read FPyFlags write SetPyFlags default [];
+    property PyFlags: TPythonFlags read FPyFlags write SetPyFlags default DEFAULT_FLAGS;
     property RedirectIO: Boolean read FRedirectIO write FRedirectIO default True;
     property UseWindowsConsole: Boolean read FUseWindowsConsole write FUseWindowsConsole default False;
     property OnAfterInit: TNotifyEvent read FOnAfterInit write FOnAfterInit;
@@ -3656,6 +3659,9 @@ begin
 
   Py_IgnoreEnvironmentFlag   := Import('Py_IgnoreEnvironmentFlag');
 
+  Py_DontWriteBytecodeFlag   := Import('Py_DontWriteBytecodeFlag');
+  Py_IsolatedFlag            := Import('Py_IsolatedFlag');
+
   Py_None                    := Import('_Py_NoneStruct');
   Py_Ellipsis                := Import('_Py_EllipsisObject');
   Py_False                   := Import('_Py_FalseStruct');
@@ -4484,7 +4490,7 @@ begin
   FInitThreads             := False;
   FTraceback               := TPythonTraceback.Create;
   FUseWindowsConsole       := False;
-  FPyFlags                 := [];
+  FPyFlags                 := DEFAULT_FLAGS;
   FDatetimeConversionMode  := DEFAULT_DATETIME_CONVERSION_MODE;
   if csDesigning in ComponentState then
     begin
@@ -4615,6 +4621,8 @@ begin
   SetFlag(Py_NoSiteFlag,      pfNoSite in FPyFlags);
   SetFlag(Py_FrozenFlag,      pfFrozenFlag in FPyFlags);
   SetFlag(Py_IgnoreEnvironmentFlag, pfIgnoreEnvironmentFlag in FPyFlags);
+  SetFlag(Py_DontWriteBytecodeFlag, pfDontWriteBytecodeFlag in FPyFlags);
+  SetFlag(Py_IsolatedFlag, pfIsolatedFlag in FPyFlags);
 end;
 
 procedure TPythonEngine.Initialize;
@@ -4706,6 +4714,8 @@ begin
     AssignPyFlags;
     if Length(FPythonHome) > 0 then
       Py_SetPythonHome(PWCharT(FPythonHome));
+    if Length(FPythonPath) > 0 then
+      Py_SetPath(PWCharT(FPythonPath));
     Py_Initialize;
     if Assigned(Py_IsInitialized) then
       FInitialized := Py_IsInitialized() <> 0
