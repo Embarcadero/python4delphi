@@ -1,3 +1,5 @@
+{$I Definition.Inc}
+unit PythonDocs;
 (**************************************************************************)
 (*  This unit is part of the Python for Delphi (P4D) library              *)
 (*  Project home: https://github.com/pyscripter/python4delphi             *)
@@ -10,10 +12,6 @@
 (*                                                                        *)
 (*  LICENCE and Copyright: MIT (see project home)                         *)
 (**************************************************************************)
-
-{$I Definition.Inc}
-
-unit PythonDocs;
 
 interface
 

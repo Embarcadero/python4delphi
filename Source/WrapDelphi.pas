@@ -1021,12 +1021,13 @@ resourcestring
   rs_ErrCheckBound = 'Delphi wrapper %s is not bound';
   rs_ErrSequence = 'Wrapper %s does not support sequences';
   rs_ErrInvalidArgs = '"%s" called with invalid arguments.'#$A'Error: %s';
-  rs_ErrInvalidRet = 'Call "%s" returned a value that could not be coverted to Python'#$A'Error: %s';
-  rs_IncompatibleArguments = 'Expected and actual arguements are incompatible';
+  rs_ErrInvalidRet = 'Call "%s" returned a value that could not be converted to Python'#$A'Error: %s';
+  rs_IncompatibleArguments = 'Expected and actual arguments are incompatible';
   rs_ErrAttrGet = 'Error in getting property "%s".'#$A'Error: %s';
   rs_UnknownAttribute = 'Unknown attribute';
   rs_ErrIterSupport = 'Wrapper %s does not support iterators';
-  rs_ErrAttrSetr = 'Error in setting property %s'#$A'Error: %s';
+  rs_ErrAttrSet = 'Error in setting property %s'#$A'Error: %s';
+  rs_ErrObjectDestroyed = 'Trying to access a destroyed pascal object';
   rs_IncompatibleClasses = 'Incompatible classes';
   rs_IncompatibleRecords = 'Incompatible record types';
   rs_IncompatibleInterfaces = 'Incompatible interfaces';
@@ -1038,6 +1039,7 @@ resourcestring
   rs_ExpectedNil = 'In static methods Self should be nil';
   rs_ExpectedInterface = 'Expected a Pascal interface';
   rs_ExpectedSequence = 'Expected a python sequence';
+  rsExpectedPPyObject = 'Expected a PPyObject';
   rs_InvalidClass = 'Invalid class';
   rs_ErrEventNotReg = 'No Registered EventHandler for events of type "%s';
   rs_ErrEventNoSuport = 'Class %s does not support events because it must '+
@@ -1267,6 +1269,7 @@ type
     function MethodWrapper(ASelf, Args, Kwds: PPyObject): PPyObject; cdecl;
     property RttiMethod: TRttiMethod read GetRttiMethod;
     property Callback: Pointer read GetCallback;
+    class function MethodDocStr(ARttiMethod: TRttiMethod): string;
   end;
 
   TExposedGetSet = class(TAbstractExposedMember)
@@ -1441,6 +1444,33 @@ begin
     RttiMethod.IsStatic or RttiMethod.IsClassMethod);
 end;
 
+class function TExposedMethod.MethodDocStr(ARttiMethod: TRttiMethod): string;
+const
+  METHOD_DOC_STR_PATTERN = '%s.%s(%s)';
+var
+  LArgsStr: string;
+  LRttiParameter: TRttiParameter;
+begin
+  LArgsStr := '';
+  for LRttiParameter in ARttiMethod.GetParameters do begin
+    if LArgsStr <> '' then
+      LArgsStr := LArgsStr + ', ';
+
+    LArgsStr := LArgsStr + LRttiParameter.Name;
+    if Assigned(LRttiParameter.ParamType) then
+      LArgsStr := LArgsStr + ': ' +
+        LRttiParameter.ParamType.Name.Replace('T', '', []);
+  end;
+
+  Result := Format(METHOD_DOC_STR_PATTERN,
+    [ARttiMethod.Parent.Name, ARttiMethod.Name, LArgsStr]);
+
+  if Assigned(ARttiMethod.ReturnType) then
+    Result := Result
+      + ' -> '
+      + ARttiMethod.ReturnType.Name.Replace('T', '', []);
+end;
+
 { TExposedGetSet }
 
 destructor TExposedGetSet.Destroy;
@@ -1483,11 +1513,14 @@ var
 begin
   Result := nil;
   if ValidateClassProperty(AObj, FParentRtti.Handle, Obj, LOutMsg) then
-  begin
+  try
     if FRttiMember is TRttiProperty then
       Result := GetRttiProperty(Obj, TRttiProperty(FRttiMember), FPyDelphiWrapper, LOutMsg)
     else if FRttiMember is TRttiField then
       Result := GetRttiField(Obj, TRttiField(FRttiMember), FPyDelphiWrapper, LOutMsg);
+  except
+    on E: Exception do
+      LOutMsg := E.Message;
   end;
 
   if not Assigned(Result) then
@@ -1503,19 +1536,22 @@ var
 begin
   Result := -1;
   if ValidateClassProperty(AObj, FParentRtti.Handle, Obj, ErrMsg) then
-  begin
+  try
     if ((FRttiMember is TRttiProperty) and SetRttiProperty(Obj,
       TRttiProperty(FRttiMember), AValue, FPyDelphiWrapper, ErrMsg)) or
       ((FRttiMember is TRttiField) and SetRttiField(Obj,
       TRttiField(FRttiMember), AValue, FPyDelphiWrapper, ErrMsg))
     then
       Result := 0
+  except
+    on E: Exception do
+      ErrMsg := E.Message;
   end;
 
   if Result <> 0 then
     with GetPythonEngine do
       PyErr_SetObject (PyExc_AttributeError^,
-        PyUnicodeFromString(Format(rs_ErrAttrSetr, [FRttiMember.Name, ErrMsg])));
+        PyUnicodeFromString(Format(rs_ErrAttrSet, [FRttiMember.Name, ErrMsg])));
 end;
 
 { TExposedField }
@@ -1611,7 +1647,7 @@ begin
   if Result <> 0 then
     with GetPythonEngine do
       PyErr_SetObject (PyExc_AttributeError^,
-        PyUnicodeFromString(Format(rs_ErrAttrSetr, [FRttiMember.Name, ErrMsg])));
+        PyUnicodeFromString(Format(rs_ErrAttrSet, [FRttiMember.Name, ErrMsg])));
 end;
 
 { TExposedIndexedProperty }
@@ -1909,18 +1945,25 @@ begin
 end;
 
 {$IFDEF EXTENDED_RTTI}
-function DynArrayToPython(const Value: TValue): PPyObject;
+function DynArrayToPython(const Value: TValue; DelphiWrapper: TPyDelphiWrapper;
+  out ErrMsg: string): PPyObject;
 var
   I: Integer;
-  V: Variant;
   PyEngine: TPythonEngine;
+  PyObj: PPyObject;
 begin
   PyEngine := GetPythonEngine();
   Result := PyEngine.PyList_New(Value.GetArrayLength);
   for I := 0 to Value.GetArrayLength() - 1 do
   begin
-    V := Value.GetArrayElement(i).AsVariant;
-    PyEngine.PyList_SetItem(Result, I, PyEngine.VariantAsPyObject(V));
+    PyObj := TValueToPyObject(Value.GetArrayElement(i), DelphiWrapper, ErrMsg);
+    if not Assigned(PyObj) then
+    begin
+      PyEngine.Py_DECREF(Result);
+      Result := nil;
+      Break;
+    end;
+    PyEngine.PyList_SetItem(Result, I, PyObj);
   end;
 end;
 
@@ -1958,14 +2001,8 @@ begin
           Result := SetToPython(Value.TypeData.CompType^,
             PInteger(Value.GetReferenceToRawData)^);
         end;
-      tkArray, tkDynArray:
-        Result := DynArrayToPython(Value);
-      tkClass, tkMethod,
-      tkRecord, tkInterface, {$IFDEF MANAGED_RECORD} tkMRecord,{$ENDIF}
-      tkClassRef, tkPointer, tkProcedure:
-        ErrMsg := rs_ErrValueToPython;
     else
-      ErrMsg := rs_ErrUnexpected;
+      ErrMsg := rs_ErrValueToPython;
     end;
   except
     on E: Exception do begin
@@ -1997,8 +2034,16 @@ begin
         end
         else
           ErrMsg := rs_ErrPythonToValue;
-      tkString, tkWString, tkUString,
-      tkLString, tkChar, tkWChar:
+      tkString, tkLString, tkChar:
+        begin
+          if GetPythonEngine.PyBytes_Check(PyValue) then
+            V := TValue.From(GetPythonEngine.PyBytesAsAnsiString(PyValue))
+          else
+            V := GetPythonEngine.PyObjectAsString(PyValue);
+          Value := V.Cast(TypeInfo);
+          Result := True;
+        end;
+      tkWString, tkUString, tkWChar:
         begin
           V := GetPythonEngine.PyObjectAsString(PyValue);
           Value := V.Cast(TypeInfo);
@@ -2100,9 +2145,10 @@ var
   Arr: array of TValue;
   I: Integer;
   elType: PPTypeInfo;
-  V: Variant;
-  Num: Int64;
   PyEngine: TPythonEngine;
+  RttiContext: TRttiContext;
+  ElementType: TRttiType;
+  ArrElem: PPyObject;
 begin
   Result := False;
   PyEngine := GetPythonEngine;
@@ -2121,18 +2167,17 @@ begin
   if elType = nil then
     Exit;
 
+  ElementType := RttiContext.GetType(elType^);
+  if ElementType = nil then
+    Exit;
+
   try
     SetLength(Arr, PyEngine.PySequence_Length(PyValue));
     for I := 0 to PyEngine.PySequence_Length(PyValue) - 1 do
     begin
-      V := PyEngine.GetSequenceItem(PyValue, i);
-      if elType^.Kind = tkEnumeration then
-      begin
-        Num := TValue.FromVariant(V).Cast(TypeInfo(Int64)).AsInt64;
-        Arr[i] := TValue.FromOrdinal(elType^, Num);
-      end
-      else
-        Arr[i] := TValue.FromVariant(V).Cast(elType^);
+      ArrElem := PyEngine.PySequence_GetItem(PyValue, I);
+      if not PyObjectToTValue(ArrElem, ElementType, Arr[I], ErrMsg) then
+        Break;
     end;
     ParamValue := TValue.FromArray(RttiType.Handle, Arr);
     Result := True;
@@ -2141,7 +2186,26 @@ begin
   end;
 end;
 
-function PyObjectToTValue(PyArg : PPyObject; ArgType: TRttiType;
+function ValidatePPyObject(PyValue: PPyObject; const RttiType: TRttiType;
+  out ParamValue: TValue; out ErrMsg: string): Boolean;
+var
+  RefType: TRttiType;
+begin
+  Result := False;
+  if (RTTIType is TRttiPointerType) then
+  begin
+    RefType := TRttiPointerType(RTTIType).ReferredType;
+    if Assigned(RefType) and (RefType.Name = 'PyObject') then
+    begin
+      Result := True;
+      ParamValue := TValue.From<PPyObject>(PyValue);
+    end;
+  end;
+  if not Result then
+    ErrMsg := rsExpectedPPyObject;
+end;
+
+function PyObjectToTValue(PyArg: PPyObject; ArgType: TRttiType;
   out Arg: TValue; out ErrMsg: string): Boolean;
 var
   Obj: TObject;
@@ -2170,7 +2234,9 @@ begin
     tkRecord{$IFDEF MANAGED_RECORD}, tkMRecord{$ENDIF}:
       Result := ValidateRecordProperty(PyArg, ArgType.Handle, Arg, ErrMsg);
     tkDynArray:
-      Result := ValidateDynArray(PyArg, ArgType, Arg, ErrMsg)
+      Result := ValidateDynArray(PyArg, ArgType, Arg, ErrMsg);
+    tkPointer:
+      Result := ValidatePPyObject(PyArg, ArgType, Arg, ErrMsg);
   else
     Result := SimplePythonToValue(PyArg, ArgType.Handle, Arg, ErrMsg);
   end;
@@ -2217,6 +2283,16 @@ begin
       tkInterface: Result := DelphiWrapper.WrapInterface(Value);
       tkRecord{$IFDEF MANAGED_RECORD},tkMRecord{$ENDIF}:
         Result := DelphiWrapper.WrapRecord(Value);
+      tkArray, tkDynArray:
+        Result := DynArrayToPython(Value, DelphiWrapper, ErrMsg);
+      tkPointer:
+        if Value.IsType<PPyObject> then
+          Result := Value.AsType<PPyObject>
+        else
+        begin
+          Result := nil;
+          ErrMsg := rs_ErrValueToPython;
+        end;
     else
       Result := SimpleValueToPython(Value, ErrMsg);
     end;
@@ -3359,7 +3435,7 @@ begin
   if Result <> 0 then
     with GetPythonEngine do
       PyErr_SetObject(PyExc_AttributeError^, PyUnicodeFromString(
-        Format(rs_ErrAttrSetr, [KeyName, ErrMsg])));
+        Format(rs_ErrAttrSet, [KeyName, ErrMsg])));
 end;
 
 function TPyRttiObject.SetProps(args, keywords: PPyObject): PPyObject;
@@ -3468,6 +3544,7 @@ function TPyDelphiObject.GetAttrO(key: PPyObject): PPyObject;
 var
   KeyName: string;
   ErrMsg : string;
+  PyEngine: TPythonEngine;
   {$IFNDEF EXTENDED_RTTI}
   {$IFNDEF FPC}
   Info: PMethodInfoHeader;
@@ -3479,16 +3556,24 @@ var
   RttiType: TRttiStructuredType;
   {$ENDIF}
 begin
-  Result := inherited GetAttrO(key);
-  if GetPythonEngine.PyErr_Occurred = nil then Exit;  // We found what we wanted
+  Result := nil;
+  PyEngine := GetPythonEngine;
 
-  // should not happen
-  if not (Assigned(DelphiObject) and
-     CheckStrAttribute(Key, 'GetAttrO key parameter', KeyName))
-  then
+  // If DelphiObject is nil exit immediately with an error
+  if not Assigned(DelphiObject) then
+  begin
+    PyEngine.PyErr_SetObject(PyEngine.PyExc_AttributeError^,
+      PyEngine.PyUnicodeFromString(rs_ErrObjectDestroyed));
     Exit;
+  end;
 
-  GetPythonEngine.PyErr_Clear;
+  if not CheckStrAttribute(Key, 'GetAttrO key parameter', KeyName) then
+    Exit; // should not happen
+
+  Result := inherited GetAttrO(key);
+  if PyEngine.PyErr_Occurred = nil then Exit;  // We found what we wanted
+
+  PyEngine.PyErr_Clear;
 {$IFDEF EXTENDED_RTTI}
   // Use RTTI
   if Assigned(DelphiObject) then begin
@@ -3545,17 +3630,17 @@ begin
         {$ELSE FPC}
         if GetTypeData(PropInfo^.PropType^)^.BaseType^ = TypeInfo(Boolean) then
         {$ENDIF FPC}
-          Result := GetPythonEngine.VariantAsPyObject(Boolean(GetOrdProp(Self.DelphiObject, PropInfo)))
+          Result := PyEngine.VariantAsPyObject(Boolean(GetOrdProp(Self.DelphiObject, PropInfo)))
         else
         {$IFDEF FPC}
-          Result := GetPythonEngine.PyUnicodeFromString(GetEnumName(PropInfo^.PropType,
+          Result := PyEngine.PyUnicodeFromString(GetEnumName(PropInfo^.PropType,
         {$ELSE FPC}
-          Result := GetPythonEngine.PyUnicodeFromString(GetEnumName(PropInfo^.PropType^,
+          Result := PyEngine.PyUnicodeFromString(GetEnumName(PropInfo^.PropType^,
         {$ENDIF FPC}
             GetOrdProp(Self.DelphiObject, PropInfo)));
       end
       end else
-         Result := GetPythonEngine.VariantAsPyObject(GetPropValue(DelphiObject, PropInfo));
+         Result := PyEngine.VariantAsPyObject(GetPropValue(DelphiObject, PropInfo));
     end;
   except
     on E: Exception do begin
@@ -3565,9 +3650,8 @@ begin
   end;
 {$ENDIF}
   if not Assigned(Result) then
-    with GetPythonEngine do
-      PyErr_SetObject (PyExc_AttributeError^,
-        PyUnicodeFromString(Format(rs_ErrAttrGet,[KeyName, ErrMsg])));
+    PyEngine.PyErr_SetObject (PyEngine.PyExc_AttributeError^,
+      PyEngine.PyUnicodeFromString(Format(rs_ErrAttrGet,[KeyName, ErrMsg])));
 end;
 
 function TPyDelphiObject.GetContainerAccess: TContainerAccess;
@@ -3751,7 +3835,7 @@ begin
   PythonType.AddGetSet('__bound__', @TPyDelphiObject.Get_Bound, nil,
     'Returns True if the wrapper is still bound to the Delphi instance.', nil);
   PythonType.AddGetSet('__owned__', @TPyDelphiObject.Get_Owned, @TPyDelphiObject.Set_Owned,
-    'Returns True if the wrapper owns the Delphi instance.', nil);
+    'Boolean read/write property that determines weather the wrapper owns the Delphi instance.', nil);
 end;
 
 class procedure TPyDelphiObject.RegisterMethods(PythonType: TPythonType);
@@ -3869,11 +3953,16 @@ begin
   Result := -1;
   PyEngine := GetPythonEngine;
 
-  // should not happen
-  if not (Assigned(DelphiObject) and
-     CheckStrAttribute(Key, 'SetAttrO key parameter', KeyName))
-  then
+  // If DelphiObject is nil exit immediately with an error
+  if not Assigned(DelphiObject) then
+  begin
+    PyEngine.PyErr_SetObject(PyEngine.PyExc_AttributeError^,
+      PyEngine.PyUnicodeFromString(rs_ErrObjectDestroyed));
     Exit;
+  end;
+
+  if not CheckStrAttribute(Key, 'SetAttrO key parameter', KeyName) then
+    Exit; // should not happen
 
   // Only call the inherited method at this stage if the attribute exists
   PyObj := PyEngine.PyObject_GenericGetAttr(GetSelf, key);
@@ -3912,10 +4001,6 @@ begin
   //  Subclasses have a __dict__ and can set extra fields
   if Result <> 0 then
     Result := inherited SetAttrO(key, value);
-  if Result <> 0 then
-    with PyEngine do
-      PyErr_SetObject(PyEngine.PyExc_AttributeError^, PyUnicodeFromString(
-        Format(rs_ErrAttrSetr, [KeyName, ErrMsg])));
 end;
 
 procedure TPyDelphiObject.SetDelphiObject(const Value: TObject);
@@ -3977,6 +4062,7 @@ end;
 class procedure TPyDelphiObject.SetupType(APythonType: TPythonType);
 var
   _ContainerAccessClass : TContainerAccessClass;
+  TypeName: string;
   PyWrapper: TPyDelphiWrapper;
   NearestAncestorClass: TClass;
   RegisteredClass: TRegisteredClass;
@@ -3987,7 +4073,17 @@ var
   {$ENDIF EXTENDED_RTTI}
 begin
   inherited;
-  APythonType.TypeName := AnsiString(GetTypeName);
+  // Deal with generics
+  TypeName := GetTypeName;
+  if Pos('<', TypeName) > 0 then
+  begin
+    TypeName := StringReplace(TypeName, '<', '_', [rfReplaceAll]);
+    TypeName := StringReplace(TypeName, '>', '_', [rfReplaceAll]);
+    TypeName := StringReplace(TypeName, '.', '_', [rfReplaceAll]);
+    TypeName := StringReplace(TypeName, ',', '_', [rfReplaceAll]);
+  end;
+
+  APythonType.TypeName := AnsiString(TypeName);
   APythonType.Name := string(APythonType.TypeName) + TPythonType.TYPE_COMP_NAME_SUFFIX;
   APythonType.GenerateCreateFunction := False;
   APythonType.DocString.Text := 'Wrapper for Pascal class ' + DelphiObjectClass.ClassName;
@@ -4079,7 +4175,7 @@ begin
 
       // Ignore methods with unhandled return type
       if Assigned(LRttiMethod.ReturnType) and (LRttiMethod.ReturnType.TypeKind
-        in [tkUnknown, tkMethod, tkPointer, tkProcedure])
+        in [tkUnknown, tkMethod, tkProcedure])
       then
         Continue;
 
@@ -4105,11 +4201,14 @@ begin
         APyDelphiWrapper, APythonType, LRttiType);
 
       //Try to load the method doc string from doc server
-      //Try to load the method doc string from doc server
       if Assigned(PyDocServer) and PyDocServer.Initialized and
         PyDocServer.ReadMemberDocStr(LRttiMethod, LDocStr)
       then
-        LExposedMethod.DocString := AnsiString(LDocStr);
+        LExposedMethod.DocString := Utf8Encode(LDocStr)
+      else
+        //Build the DocStr including method args
+        LExposedMethod.DocString :=
+          Utf8Encode(TExposedMethod.MethodDocStr(LRttiMethod));
 
       // Keep it alive until the Wrapper is Finalized
       APyDelphiWrapper.fExposedMembers.Add(LExposedMethod);
@@ -4178,7 +4277,7 @@ begin
         Continue;
 
       // Skip if the type cannot be handled
-      if LRttiField.FieldType.TypeKind  in [tkUnknown, tkMethod, tkPointer, tkProcedure] then
+      if LRttiField.FieldType.TypeKind  in [tkUnknown, tkMethod, tkProcedure] then
         Continue;
 
       AddedFields := AddedFields + [LRttiField.Name];
@@ -4264,7 +4363,7 @@ begin
       else
       begin
         // Skip if the type cannot be handled
-        if LRttiProperty.PropertyType.TypeKind in [tkUnknown, tkPointer, tkMethod, tkProcedure] then
+        if LRttiProperty.PropertyType.TypeKind in [tkUnknown, tkMethod, tkProcedure] then
           Continue;
 
         // Create the exposed property
@@ -4348,7 +4447,7 @@ begin
         Continue;
 
       // Skip if the type cannot be handled
-      if LRttiProperty.PropertyType.TypeKind  in [tkUnknown, tkPointer, tkMethod, tkProcedure] then
+      if LRttiProperty.PropertyType.TypeKind  in [tkUnknown, tkMethod, tkProcedure] then
         Continue;
 
       AddedProperties := AddedProperties + [LRttiProperty.Name];
