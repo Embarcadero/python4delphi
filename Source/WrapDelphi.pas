@@ -1269,6 +1269,7 @@ type
     function MethodWrapper(ASelf, Args, Kwds: PPyObject): PPyObject; cdecl;
     property RttiMethod: TRttiMethod read GetRttiMethod;
     property Callback: Pointer read GetCallback;
+    class function MethodDocStr(ARttiMethod: TRttiMethod): string;
   end;
 
   TExposedGetSet = class(TAbstractExposedMember)
