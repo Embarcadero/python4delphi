@@ -22,6 +22,7 @@ package PythonFmxLinux;
 {$VARSTRINGCHECKS ON}
 {$WRITEABLECONST OFF}
 {$MINENUMSIZE 1}
+{$IMAGEBASE $400000}
 {$DEFINE RELEASE}
 {$ENDIF IMPLICITBUILDING}
 {$DESCRIPTION 'Python4Delphi - Run-time Engine Package for FMXLinux'}
@@ -57,7 +58,8 @@ contains
   WrapFmxStdCtrls in '..\..\..\Source\fmx\WrapFmxStdCtrls.pas',
   WrapFmxStyles in '..\..\..\Source\fmx\WrapFmxStyles.pas',
   WrapFmxTypes in '..\..\..\Source\fmx\WrapFmxTypes.pas',
-  WrapFmxDateTime in '..\..\..\Source\fmx\WrapFmxDateTime.pas';
+  WrapFmxDateTime in '..\..\..\Source\fmx\WrapFmxDateTime.pas',
+  WrapFmxImgList in '..\..\..\Source\fmx\WrapFmxImgList.pas';
 
 end.
 
