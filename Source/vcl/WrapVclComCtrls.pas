@@ -742,8 +742,10 @@ type
 implementation
 
 uses
-  WrapDelphiTypes, WrapDelphiWindows,
-  Vcl.ExtCtrls;
+  System.Rtti,
+  Vcl.ExtCtrls,
+  WrapDelphiTypes,
+  WrapDelphiWindows;
 
 { Register the wrappers, the globals and the constants }
 type
@@ -781,30 +783,12 @@ begin
 end;
 
 function CustomDrawStateToPython(const ACustomDrawState: TCustomDrawState): PPyObject;
-
-  procedure Append(const AList: PPyObject; const AString: string);
-  var
-    LItem: PPyObject;
-  begin
-    with GetPythonEngine do begin
-      LItem := PyUnicodeFromString(AString);
-      PyList_Append(AList, LItem);
-      Py_XDecRef(LItem);
-    end;
-  end;
-
 var
-  LCompType: PTypeInfo;
-  LMin: integer;
-  LMax: integer;
-  LState: integer;
+  ErrMsg: string;
+  Value: TValue;
 begin
-  Result := GetPythonEngine().PyList_New(0);
-  LCompType := GetTypeData(TypeInfo(TCustomDrawState)).CompType^;
-  LMin := LCompType^.TypeData^.MinValue;
-  LMax := LCompType^.TypeData^.MaxValue;
-  for LState := LMin to LMax do
-    Append(Result, GetEnumName(LCompType, LState));
+  Value := TValue.From(ACustomDrawState);
+  Result := SimpleValueToPython(Value, ErrMsg);
 end;
 
 function ItemChangeToPython(const AItemChange: TItemChange): PPyObject;

@@ -1068,7 +1068,7 @@ const
   PyInterpreterConfig_SHARED_GIL = 1;
   PyInterpreterConfig_OWN_GIL = 2;
 
-  type
+type
   PPyInterpreterConfig = ^PyInterpreterConfig;
   PyInterpreterConfig = {$IFDEF CPUX86}packed{$ENDIF} record
     use_main_obmalloc: Integer;
@@ -1080,7 +1080,7 @@ const
     gil: Integer;
   end;
 
-const
+var
   _PyInterpreterConfig_INIT: PyInterpreterConfig =
     ( use_main_obmalloc: 0;
       allow_fork: 0;
@@ -2906,9 +2906,9 @@ type
   private class threadvar
     f_savethreadstate: PPyThreadState;
 
+  protected
     // Do not overwrite Execute! Use ExecuteWithPython instead!
     procedure Execute; override;
-  protected
     procedure ExecuteWithPython; virtual; abstract;
     function InterpreterConfig: PyInterpreterConfig; virtual;
   public
@@ -4668,7 +4668,7 @@ procedure TPythonEngine.Initialize;
 
     PWSL := PPyWideStringList(PByte(@Config) + ConfigOffests[MinorVersion,
       TConfigFields.module_search_paths]);
-    Paths := FPythonPath.Split([PathSep]);
+    Paths := string(FPythonPath).Split([PathSep]);
     for I := 0 to Length(Paths) - 1 do
     begin
       if (Paths[I] = '') and (I > 0) then
@@ -8373,7 +8373,6 @@ begin
     begin
       Engine.Py_DECREF(Result);
       Result := nil;
-      obj.Free;
     end;
   end;
 end;
@@ -9305,7 +9304,7 @@ begin
       finally
         PyGILState_Release(gilstate);
       end;
-    end else {fThreadExecMode}
+    end else
     begin
       gilstate := PyGILState_Ensure();
       global_state := PyThreadState_Get;
@@ -9328,8 +9327,8 @@ begin
         PyThreadState_Swap(global_state);
         PyGILState_Release(gilstate);
       end else
-        raise EPythonError.Create( 'Could not create a new thread state');
-    end; {withinterp}
+        raise EPythonError.Create('Could not create a new thread state');
+    end;
   end;
 end;
 
@@ -9781,7 +9780,7 @@ begin
   {$IFDEF POSIX}
   Result := UnicodeStringToUCS4String(UnicodeString(Str));
   {$ELSE}
-  Result := Str;
+  Result := WcharTString(Str);
   {$ENDIF}
 end;
 
