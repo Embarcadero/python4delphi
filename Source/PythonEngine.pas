@@ -165,6 +165,8 @@ type
   C_ULong = NativeUInt;
 {$ENDIF}
 
+  PC_ULong = ^C_ULong;
+
 // wchar_t is 4 bytes on Linux/OS X/Android but 2 bytes on Windows
 {$IFDEF POSIX}
   PWCharT = PUCS4Char;
@@ -980,76 +982,199 @@ type
     exitcode: Integer;
   end;
 
- PPyWideStringList = ^PyWideStringList;
- PyWideStringList = {$IFDEF CPUX86}packed{$ENDIF} record
-   length: Py_ssize_t;
-   items: PPWCharT;
- end;
+  PPyWideStringList = ^PyWideStringList;
+  PyWideStringList = {$IFDEF CPUX86}packed{$ENDIF} record
+    length: Py_ssize_t;
+    items: PPWCharT;
+  end;
 
- PPyConfig = ^PyConfig;
- PyConfig = record
-   // The definition of PyConfig has been changing in every python version
-   // So we make this structure opaque and we access its fields through
-   // the ConfigOffsets below
-   Filler: array [0..1000] of Byte;
- end;
-
-{$SCOPEDENUMS ON}
-  TConfigFields = (
-    use_environment,
-    parse_argv,
-    argv,
-    site_import,
-    interactive,
-    optimization_level,
-    parser_debug,
-    verbose,
-    pathconfig_warnings,
-    program_name,
-    home,
-    module_search_paths_set,
-    module_search_paths,
-    executable);
-{$SCOPEDENUMS OFF}
-
-  TConfigOffsets = array [8..13] of array [TConfigFields] of Integer;
-
-  // The followng needs updating when new versions are added
-  const
-    ConfigOffests: TConfigOffsets =
+  PyPreConfig = record // DO NOT PACK
+  public type
+    TAllocator = (
+      PYMEM_ALLOCATOR_NOT_SET = 0,
+      PYMEM_ALLOCATOR_DEFAULT = 1,
+      PYMEM_ALLOCATOR_DEBUG = 2,
+      PYMEM_ALLOCATOR_MALLOC = 3,
+      PYMEM_ALLOCATOR_MALLOC_DEBUG = 4,
+      PYMEM_ALLOCATOR_PYMALLOC = 5,
+      PYMEM_ALLOCATOR_PYMALLOC_DEBUG = 6);
+  public
+    _config_init: integer;
+    parse_argv: integer;
+    isolated: integer;
+    use_environment: integer;
+    configure_locale: integer;
+    coerce_c_locale: integer;
+    coerce_c_locale_warn: integer;
     {$IFDEF MSWINDOWS}
-      {$IFDEF CPU64BITS}
-      ((8, 80, 88, 144, 156, 160, 164, 172, 224, 104, 240, 248, 256, 272),
-       (8, 80, 88, 144, 156, 160, 164, 172, 224, 104, 240, 248, 256, 272),
-       (8, 80, 104, 152, 168, 172, 176, 184, 232, 240, 256, 272, 280, 296),
-       (8, 96, 120, 168, 184, 188, 192, 200, 264, 272, 288, 304, 312, 336),
-       (8, 96, 120, 168, 184, 188, 192, 200, 268, 272, 288, 304, 312, 336),
-       (8, 96, 120, 168, 184, 188, 192, 200, 272, 280, 296, 312, 320, 344));
-      {$ELSE}
-      ((8, 68, 72, 100, 112, 116, 120, 128, 164, 80, 172, 176, 180, 188),
-       (8, 68, 72, 100, 112, 116, 120, 128, 164, 80, 172, 176, 180, 188),
-       (8, 64, 76, 100, 116, 120, 124, 132, 168, 172, 180, 188, 192, 200),
-       (8, 72, 84, 108, 124, 128, 132, 140, 184, 188, 196, 204, 208, 220),
-       (8, 76, 88, 112, 128, 132, 136, 144, 192, 196, 204, 212, 216, 228),
-       (8, 76, 88, 112, 128, 132, 136, 144, 196, 200, 208, 216, 220, 232));
-      {$ENDIF}
-    {$ELSE}
-      {$IFDEF CPU64BITS}
-      ((8, 88, 96, 152, 164, 168, 172, 180, 224, 112, 240, 248, 256, 272),
-       (8, 88, 96, 152, 164, 168, 172, 180, 224, 112, 240, 248, 256, 272),
-       (8, 80, 104, 152, 168, 172, 176, 184, 232, 240, 256, 272, 280, 296),
-       (8, 96, 120, 168, 184, 188, 192, 200, 256, 264, 280, 296, 304, 328),
-       (8, 104, 128, 176, 192, 196, 200, 208, 268, 272, 288, 304, 312, 336),
-       (8, 104, 128, 176, 192, 196, 200, 208, 272, 280, 296, 312, 320, 344));
-      {$ELSE}
-      ((8, 68, 72, 100, 112, 116, 120, 128, 160, 80, 168, 172, 176, 184),
-       (8, 68, 72, 100, 112, 116, 120, 128, 160, 80, 168, 172, 176, 184),
-       (8, 64, 76, 100, 116, 120, 124, 132, 164, 168, 176, 184, 188, 196),
-       (8, 72, 84, 108, 124, 128, 132, 140, 180, 184, 192, 200, 204, 216),
-       (8, 76, 88, 112, 128, 132, 136, 144, 188, 192, 200, 208, 212, 224),
-       (8, 76, 88, 112, 128, 132, 136, 144, 192, 196, 204, 212, 216, 228));
-      {$ENDIF}
-    {$ENDIF}
+    legacy_windows_fs_encoding: integer;
+    {$ENDIF MSWINDOWS}
+    utf8_mode: integer;
+    dev_mode: integer;
+    allocator: TAllocator; //Evaluates to a 4-Bytes integer
+  end;
+
+  MinPythonVerAttribute = class(TCustomAttribute)
+  private
+    FMinVersion: integer;
+  public
+    constructor Create(const AMinVersion: integer);
+    property MinVersion: integer read FMinVersion;
+  end;
+
+  EqualsOrGreaterThanAttribute = class(MinPythonVerAttribute);
+  EqualsOrLessThanAttribute = class(MinPythonVerAttribute);
+  EqualsAttribute = class(MinPythonVerAttribute);
+
+  RedirectAttribute = class(TCustomAttribute)
+  private type
+    TMinVersion = (cp8 = 8, cp9 = 9, cp10 = 10, cp11 = 11, cp12 = 12, cp13 = 13);
+    TMinVersions = set of TMinVersion;
+  private
+    FMinVersions: TMinVersions;
+    FTarget: string;
+  public
+    constructor Create(const AMinVersions: TMinVersions; const ATarget: string);
+    property MinVersions: TMinVersions read FMinVersions write FMinVersions;
+    property Target: string read FTarget write FTarget;
+  end;
+
+  CheckPyGilDisabledAttribute = class(TCustomAttribute)
+  public
+    function IsDisabled(): boolean;
+  end;
+
+  CheckPyStatsAttribute = class(TCustomAttribute)
+  public
+    function IsEnabled(): boolean;
+  end;
+
+  CheckPyDebugAttribute = class(TCustomAttribute)
+  public
+    function IsEnabled(): boolean;
+  end;
+
+  PPyConfig = ^PyConfig;
+  PyConfig = record
+  private
+    _Container: array[0..999] of byte;
+  public const
+    CHECK_HASH_PYCS_MODE_ALWAYS = 'always';
+    CHECK_HASH_PYCS_MODE_NEVER = 'never';
+    CHECK_HASH_PYCS_MODE_DEFAULT = 'default';
+  public
+    _config_init: PInteger;
+    isolated: PInteger;
+    use_environment: PInteger;
+    dev_mode: PInteger;
+    install_signal_handlers: PInteger;
+    use_hash_seed: PInteger;
+    hash_seed: PC_ULong;
+    faulthandler: PInteger;
+    [Equals(9)]
+    _use_peg_parser: PInteger;
+    tracemalloc: PInteger;
+    [EqualsOrGreaterThan(12)]
+    perf_profiling: PInteger;
+    import_time: PInteger;
+    [EqualsOrGreaterThan(11)]
+    code_debug_ranges: PInteger;
+    show_ref_count: PInteger;
+    [Equals(8)]
+    show_alloc_count: PInteger;
+    dump_refs: PInteger;
+    [EqualsOrGreaterThan(11)]
+    dump_refs_file: PPWCharT;
+    malloc_stats: PInteger;
+    filesystem_encoding: PPWCharT;
+    filesystem_errors: PPWCharT;
+    pycache_prefix: PPWCharT;
+    parse_argv: PInteger;
+    [EqualsOrGreaterThan(10)]
+    orig_argv: PPyWideStringList;
+    argv: PPyWideStringList;
+    [EqualsOrLessThan(9)]
+    [Redirect([cp10, cp11, cp12, cp13], 'program_name_1')]
+    program_name: PPWCharT;
+    xoptions: PPyWideStringList;
+    warnoptions: PPyWideStringList;
+    site_import: PInteger;
+    bytes_warning: PInteger;
+    [EqualsOrGreaterThan(10)]
+    warn_default_encoding: PInteger;
+    inspect: PInteger;
+    interactive: PInteger;
+    optimization_level: PInteger;
+    parser_debug: PInteger;
+    write_bytecode: PInteger;
+    verbose: PInteger;
+    quiet: PInteger;
+    user_site_directory: PInteger;
+    configure_c_stdio: PInteger;
+    beffered_stdio: PInteger;
+    stdio_encoding: PPWCharT;
+    stdio_errors: PPWCharT;
+    {$IFDEF MSWINDOWS}
+    legacy_windows_stdio: PInteger;
+    {$ENDIF MSWINDOWS}
+    check_hash_pycs_mode: PPWCharT;
+    [EqualsOrGreaterThan(11)]
+    use_frozen_modules: PInteger;
+    [EqualsOrGreaterThan(11)]
+    safe_path: PInteger;
+    [EqualsOrGreaterThan(12)]
+    int_max_str_digits: PInteger;
+    [EqualsOrGreaterThan(13)]
+    cpu_count: PInteger;
+    [EqualsOrGreaterThan(13)]
+    [CheckPyGilDisabled()]
+    enable_gil: PInteger;
+    pathconfig_warnings: PInteger;
+    [EqualsOrGreaterThan(10)]
+    program_name_1: PPWCharT;
+    pythonpath_env: PPWCharT;
+    home: PPWCharT;
+    [EqualsOrGreaterThan(10)]
+    platlibdir_1: PPWCharT;
+    module_search_paths_set: PInteger;
+    module_search_paths: PPyWideStringList;
+    [EqualsOrGreaterThan(11)]
+    stdlib_dir: PPWCharT;
+    executable: PPWCharT;
+    base_executable: PPWCharT;
+    prefix: PPWCharT;
+    base_prefix: PPWCharT;
+    exec_prefix: PPWCharT;
+    base_exec_prefix: PPWCharT;
+    [Equals(9)]
+    [Redirect([cp10, cp11, cp12, cp13], 'platlibdir_1')]
+    platlibdir: PPWCharT;
+    skip_source_first_line: PInteger;
+    run_command: PPWCharT;
+    run_module: PPWCharT;
+    run_filename: PPWCharT;
+    [EqualsOrGreaterThan(13)]
+    sys_path_0: PPWCharT;
+    _install_importlib: PInteger;
+    _init_main: PInteger;
+    [EqualsOrGreaterThan(9)]
+    _isolated_interpreter: PInteger;
+    [Equals(9)]
+    _orig_argv: PPyWideStringList;
+    [EqualsOrGreaterThan(11)]
+    _is_python_build: PInteger;
+    [EqualsOrGreaterThan(13)]
+    [CheckPyStats()]
+    _pystats: PInteger;
+    [EqualsOrGreaterThan(13)]
+    [CheckPyDebug()]
+    run_presite: PPWCharT;
+  public
+    constructor Create(const AMinVersion: integer);
+
+    procedure Patch(const AMinVersion: integer);
+  end;
+
 
 //#######################################################
 //##                                                   ##
@@ -1821,13 +1946,17 @@ type
     // Initialization functions
     PyWideStringList_Append         : function(list: PPyWideStringList; item: PWCharT): PyStatus; cdecl;
     PyWideStringList_Insert         : function(list: PPyWideStringList; index: Py_ssize_t; item: PWCharT): PyStatus; cdecl;
+    PyPreConfig_InitPythonConfig    : procedure(var preconfig: PyPreConfig); cdecl;
+    PyPreConfig_InitIsolatedConfig  : procedure(var preconfig: PyPreConfig); cdecl;
     PyConfig_InitPythonConfig       : procedure(var config: PyConfig); cdecl;
     PyConfig_InitIsolatedConfig     : procedure(var config: PyConfig); cdecl;
     PyConfig_Clear                  : procedure(var config: PyConfig); cdecl;
     PyConfig_SetString              : function(var config: PyConfig; config_str: PPWCharT; str: PWCharT): PyStatus; cdecl;
+    PyConfig_SetBytesString         : function(var config: PyConfig; config_str: PPWCharT; const str: PWCharT): PyStatus; cdecl;
     PyConfig_Read                   : function(var config: PyConfig): PyStatus; cdecl;
     PyConfig_SetArgv                : function(var config: PyConfig; argc: Py_ssize_t; argv: PPWCharT): PyStatus; cdecl;
     PyConfig_SetWideStringList      : function(var config: PyConfig; list: PPyWideStringList; length: Py_ssize_t; items: PPWCharT): PyStatus; cdecl;
+    Py_PreInitialize                : function({$IFDEF FPC}constref{$ELSE}[Ref] const{$ENDIF} preconfig: PyPreConfig): PyStatus; cdecl;
     Py_InitializeFromConfig         : function({$IFDEF FPC}constref{$ELSE}[Ref] const{$ENDIF} config: PyConfig): PyStatus; cdecl;
 
   function Py_CompileString(str,filename:PAnsiChar;start:integer) : PPyObject; cdecl;
@@ -3034,7 +3163,11 @@ uses
   PsAPI,
 {$ENDIF}
 {$ENDIF}
-  Math;
+  Math,
+  TypInfo,
+  Rtti,
+  System.Generics.Defaults,
+  System.Generics.Collections;
 
 (*******************************************************)
 (**                                                   **)
@@ -4089,16 +4222,20 @@ begin
   PyGILState_Ensure        := Import('PyGILState_Ensure');
   PyGILState_Release       := Import('PyGILState_Release');
 
-  PyWideStringList_Append     := Import('PyWideStringList_Append');
-  PyWideStringList_Insert     := Import('PyWideStringList_Insert');
-  PyConfig_InitPythonConfig   := Import('PyConfig_InitPythonConfig');
-  PyConfig_InitIsolatedConfig := Import('PyConfig_InitIsolatedConfig');
-  PyConfig_Clear              := Import('PyConfig_Clear');
-  PyConfig_SetString          := Import('PyConfig_SetString');
-  PyConfig_Read               := Import('PyConfig_Read');
-  PyConfig_SetArgv            := Import('PyConfig_SetArgv');
-  PyConfig_SetWideStringList  := Import('PyConfig_SetWideStringList');
-  Py_InitializeFromConfig     := Import('Py_InitializeFromConfig');
+  PyWideStringList_Append        := Import('PyWideStringList_Append');
+  PyWideStringList_Insert        := Import('PyWideStringList_Insert');
+  PyPreConfig_InitPythonConfig   := Import('PyPreConfig_InitPythonConfig');
+  PyPreConfig_InitIsolatedConfig := Import('PyPreConfig_InitIsolatedConfig');
+  PyConfig_InitPythonConfig      := Import('PyConfig_InitPythonConfig');
+  PyConfig_InitIsolatedConfig    := Import('PyConfig_InitIsolatedConfig');
+  PyConfig_Clear                 := Import('PyConfig_Clear');
+  PyConfig_SetString             := Import('PyConfig_SetString');
+  PyConfig_SetBytesString        := Import('PyConfig_SetBytesString');
+  PyConfig_Read                  := Import('PyConfig_Read');
+  PyConfig_SetArgv               := Import('PyConfig_SetArgv');
+  PyConfig_SetWideStringList     := Import('PyConfig_SetWideStringList');
+  Py_PreInitialize               := Import('Py_PreInitialize');
+  Py_InitializeFromConfig        := Import('Py_InitializeFromConfig');
 end;
 
 function TPythonInterface.Py_CompileString(str,filename:PAnsiChar;start:integer):PPyObject;
@@ -4631,20 +4768,13 @@ end;
 
 procedure TPythonEngine.AssignPyFlags(var Config: PyConfig);
 begin
-  PInteger(PByte(@Config) + ConfigOffests[MinorVersion, TConfigFields.parser_debug])^ :=
-    IfThen(pfDebug in FPyFlags, 1, 0);
-  PInteger(PByte(@Config) + ConfigOffests[MinorVersion, TConfigFields.verbose])^ :=
-    IfThen(pfVerbose in FPyFlags, 1, 0);
-  PInteger(PByte(@Config) + ConfigOffests[MinorVersion, TConfigFields.interactive])^ :=
-    IfThen(pfInteractive in FPyFlags, 1, 0);
-  PInteger(PByte(@Config) + ConfigOffests[MinorVersion, TConfigFields.optimization_level])^ :=
-    IfThen(pfOptimize in FPyFlags, 1, 0);
-  PInteger(PByte(@Config) + ConfigOffests[MinorVersion, TConfigFields.site_import])^ :=
-    IfThen(pfNoSite in FPyFlags, 0, 1);
-  PInteger(PByte(@Config) + ConfigOffests[MinorVersion, TConfigFields.pathconfig_warnings])^ :=
-    IfThen(pfFrozenFlag in FPyFlags, 1, 0);
-  PInteger(PByte(@Config) + ConfigOffests[MinorVersion, TConfigFields.use_environment])^ :=
-    IfThen(pfIgnoreEnvironmentFlag in FPyFlags, 0, 1);
+  Config.parser_debug^ := IfThen(pfDebug in FPyFlags, 1, 0);
+  Config.verbose^ := IfThen(pfVerbose in FPyFlags, 1, 0);
+  Config.interactive^ := IfThen(pfInteractive in FPyFlags, 1, 0);
+  Config.optimization_level^ := IfThen(pfOptimize in FPyFlags, 1, 0);
+  Config.site_import^ := IfThen(pfNoSite in FPyFlags, 0, 1);
+  Config.pathconfig_warnings^ := IfThen(pfFrozenFlag in FPyFlags, 1, 0);
+  Config.use_environment^ := IfThen(pfIgnoreEnvironmentFlag in FPyFlags, 0, 1);
 end;
 
 procedure TPythonEngine.Initialize;
@@ -4662,23 +4792,21 @@ procedure TPythonEngine.Initialize;
   var
     Paths: TArray<string>;
     I: Integer;
-    PWSL: PPyWideStringList;
   begin
     if FPythonPath = '' then Exit;
 
-    PWSL := PPyWideStringList(PByte(@Config) + ConfigOffests[MinorVersion,
-      TConfigFields.module_search_paths]);
-    Paths := string(FPythonPath).Split([PathSep]);
+    Paths := FPythonPath.Split([PathSep]);
     for I := 0 to Length(Paths) - 1 do
     begin
       if (Paths[I] = '') and (I > 0) then
         Continue;
-      PyWideStringList_Append(PWSL, PWCharT(StringToWCharTString(Paths[I])));
+      PyWideStringList_Append(
+        Config.module_search_paths,
+        PWCharT(StringToWCharTString(Paths[I])));
     end;
 
-    if PWSL^.length > 0 then
-      PInteger(PByte(@Config) + ConfigOffests[MinorVersion,
-        TConfigFields.module_search_paths_set])^ := 1;
+    if Config.module_search_paths^.length > 0 then
+      Config.module_search_paths_set^ := 1;
   end;
 
   function GetVal(AModule : PPyObject; AVarName : AnsiString) : PPyObject;
@@ -4730,6 +4858,7 @@ procedure TPythonEngine.Initialize;
 
 var
   i : Integer;
+  PreConfig: PyPreConfig;
   Config: PyConfig;
   Status: PyStatus;
   ErrMsg: string;
@@ -4744,43 +4873,53 @@ begin
     FInitialized := True
   else
   begin
-    // Fills Config with zeros and then sets some default values
+    // Initialize PreConfig to behave as regular Python
     if pfIsolated in FPyFlags then
-      PyConfig_InitIsolatedConfig(Config)
+      PyPreConfig_InitIsolatedConfig(PreConfig)
     else
-      PyConfig_InitPythonConfig(Config);
-    try
-      AssignPyFlags(Config);
+      PyPreConfig_InitPythonConfig(PreConfig);
 
-      // Set programname and pythonhome if available
-      if FProgramName <> '' then
-        PyConfig_SetString(Config,
-          PPWcharT(PByte(@Config) + ConfigOffests[MinorVersion, TConfigFields.program_name]),
-          PWCharT(StringToWCharTString(FProgramName)));
-      if FPythonHome <> '' then
-        PyConfig_SetString(Config,
-          PPWcharT(PByte(@Config) + ConfigOffests[MinorVersion, TConfigFields.home]),
-          PWCharT(StringToWCharTString(FPythonHome)));
-      // Set venv executable if available
-      if FVenvPythonExe <> '' then
-        PyConfig_SetString(Config,
-          PPWcharT(PByte(@Config) + ConfigOffests[MinorVersion, TConfigFields.executable]),
-          PWCharT(StringToWCharTString(FVenvPythonExe)));
+    Status := Py_PreInitialize(PreConfig);
+    if not PyStatus_Exception(Status) then begin
+      // Fills Config with zeros and then sets some default values
+      Config := PyConfig.Create(MinorVersion);
+      if pfIsolated in FPyFlags then
+        PyConfig_InitIsolatedConfig(Config)
+      else
+        PyConfig_InitPythonConfig(Config);
+      try
+        AssignPyFlags(Config);
 
-      // Set program arguments (sys.argv)
-      SetProgramArgs(Config);
+        // Set programname and pythonhome if available
+        if FProgramName <> '' then
+          PyConfig_SetString(Config,
+            PPWcharT(Config.program_name),
+            PWCharT(StringToWCharTString(FProgramName)));
+        if FPythonHome <> '' then
+          PyConfig_SetString(Config,
+            PPWcharT(Config.home),
+            PWCharT(StringToWCharTString(FPythonHome)));
+        // Set venv executable if available
+        if FVenvPythonExe <> '' then
+          PyConfig_SetString(Config,
+            PPWcharT(Config.executable),
+            PWCharT(StringToWCharTString(FVenvPythonExe)));
 
-      // PythonPath
-      SetPythonPath(Config);
+        // Set program arguments (sys.argv)
+        SetProgramArgs(Config);
 
-      // Fine tune Config
-      if Assigned(FOnConfigInit) then
-        FOnConfigInit(Self, Config);
+        // PythonPath
+        SetPythonPath(Config);
 
-      Status := Py_InitializeFromConfig(Config);
-      FInitialized := Py_IsInitialized() <> 0
-    finally
-      PyConfig_Clear(Config);
+        // Fine tune Config
+        if Assigned(FOnConfigInit) then
+          FOnConfigInit(Self, Config);
+
+        Status := Py_InitializeFromConfig(Config);
+        FInitialized := Py_IsInitialized() <> 0
+      finally
+        PyConfig_Clear(Config);
+      end;
     end;
 
     if not FInitialized then
@@ -4871,7 +5010,7 @@ var
 
 begin
   // do not parse further
-  PInteger(PByte(@Config) + ConfigOffests[MinorVersion, TConfigFields.parse_argv])^ := 0;
+  Config.parse_argv^ := 0;
   for I := 0 to ParamCount do
   begin
     {
@@ -4889,7 +5028,7 @@ begin
     Str := TempS;
     {$ENDIF}
     PyWideStringList_Append(
-      PPyWideStringList(PByte(@Config) + ConfigOffests[MinorVersion, TConfigFields.argv]),
+      Config.argv,
       PWCharT(Str));
    end;
 end;
@@ -9830,8 +9969,6 @@ begin
   Result := TPyEngineAndGIL.Create
 end;
 
-
-
 {$IFNDEF FPC}
 
 { TAnonymousPythonThread }
@@ -9903,5 +10040,151 @@ end;
 
 {$ENDIF FPC}
 
-end.
+{ MinPythonVerAttribute }
 
+constructor MinPythonVerAttribute.Create(
+  const AMinVersion: integer);
+begin
+  FMinVersion := AMinVersion;
+end;
+
+{ RedirectAttribute }
+
+constructor RedirectAttribute.Create(const AMinVersions: TMinVersions;
+  const ATarget: string);
+begin
+  FMinVersions := AMinVersions;
+  FTarget := ATarget;
+end;
+
+{ CheckPyGilDisabledAttribute }
+
+function CheckPyGilDisabledAttribute.IsDisabled: boolean;
+begin
+  Result := false;
+end;
+
+{ CheckPyStatsAttribute }
+
+function CheckPyStatsAttribute.IsEnabled: boolean;
+begin
+  Result := false;
+end;
+
+{ CheckPyDebugAttribute }
+
+function CheckPyDebugAttribute.IsEnabled: boolean;
+begin
+  Result := false;
+end;
+
+{ PyConfig }
+
+constructor PyConfig.Create(const AMinVersion: integer);
+begin
+  Patch(AMinVersion);
+end;
+
+procedure PyConfig.Patch(const AMinVersion: integer);
+
+  function IsAvailable(const ARttiField: TRttiField): boolean;
+  begin
+    if ARttiField.HasAttribute<EqualsAttribute> then
+      if (ARttiField.GetAttribute<EqualsAttribute>.MinVersion <> AMinVersion) then
+        Exit(false);
+
+    if ARttiField.HasAttribute<EqualsOrGreaterThanAttribute> then
+      if (ARttiField.GetAttribute<EqualsOrGreaterThanAttribute>.MinVersion > AMinVersion) then
+        Exit(false);
+
+    if ARttiField.HasAttribute<EqualsOrLessThanAttribute> then
+      if (ARttiField.GetAttribute<EqualsOrLessThanAttribute>.MinVersion < AMinVersion) then
+        Exit(false);
+
+    if ARttiField.HasAttribute<CheckPyGilDisabledAttribute> then
+      if not (ARttiField.GetAttribute<CheckPyGilDisabledAttribute>.IsDisabled()) then
+        Exit(false);
+
+    if ARttiField.HasAttribute<CheckPyStatsAttribute> then
+      if not (ARttiField.GetAttribute<CheckPyStatsAttribute>.IsEnabled()) then
+        Exit(false);
+
+    if ARttiField.HasAttribute<CheckPyDebugAttribute> then
+      if not (ARttiField.GetAttribute<CheckPyDebugAttribute>.IsEnabled()) then
+        Exit(false);
+
+    Result := true;
+  end;
+
+  function ShouldRedirect(const ARttiField: TRttiField; out ARedirectTo: TRttiField): boolean;
+  begin
+    for var LRttiAttr in ARttiField.GetAttributes() do begin
+      if not (LRttiAttr is RedirectAttribute) then
+        Continue;
+
+      var LRedirectAttr := LRttiAttr as RedirectAttribute;
+      if (RedirectAttribute.TMinVersion(AMinVersion) in LRedirectAttr.MinVersions) then begin
+        ARedirectTo := ARttiField.Parent.GetField(LRedirectAttr.Target);
+        if Assigned(ARedirectTo) then
+          Exit(true);
+      end;
+    end;
+
+    Result := false;
+  end;
+
+var
+  LValue: TValue;
+begin
+  TValue.Make(Pointer(@_Container[0]), LValue);
+  var LSite := LValue.GetReferenceToRawData;
+
+  FillChar(_Container, SizeOf(_Container), 0);
+
+  var LRttiCtx := TRttiContext.Create();
+  try
+    var LRttiType := LRttiCtx.GetType(TypeInfo(PyConfig));
+
+    var LFields := LRttiType.GetFields();
+    TArray.Sort<TRttiField>(
+      LFields,
+      TComparer<TRttiField>.Construct(
+        function(const Left, Right: TRttiField): Integer begin
+          Result := TDelegatedComparer<Integer>.Default.Compare(Left.Offset, Right.Offset);
+        end));
+
+    // Point to container
+    for var LRttiField in LFields do begin
+      if LRttiField.Name = '_Container' then
+        Continue;
+
+      if not (LRttiField.FieldType.TypeKind = tkPointer) then
+        raise Exception.CreateFmt('Invalid type for field "%s"', [LRttiField.Name]);
+
+      var LBaseType := (LRttiField.FieldType as TRttiPointerType).ReferredType;
+
+      if not IsAvailable(LRttiField) then begin
+        LRttiField.SetValue(@Self, nil);
+        Continue;
+      end;
+
+      LRttiField.SetValue(@Self, LValue);
+
+      PPointer(LSite)^ := Pointer(NativeInt(PPointer(LSite)^) + LBaseType.TypeSize);
+    end;
+
+    // Fix same name diff offset (redirect)
+    for var LRttiField in LFields do begin
+      var LRedirectTo := TRttiField(nil);
+      if not ShouldRedirect(LRttiField, LRedirectTo) then
+        Continue;
+
+      LRttiField.SetValue(@Self, LRedirectTo.GetValue(@Self));
+    end;
+
+  finally
+    LRttiCtx.Free();
+  end;
+end;
+
+end.
