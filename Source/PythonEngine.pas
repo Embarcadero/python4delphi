@@ -165,6 +165,8 @@ type
   C_ULong = NativeUInt;
 {$ENDIF}
 
+  PC_LONG = ^C_LONG;
+
 // wchar_t is 4 bytes on Linux/OS X/Android but 2 bytes on Windows
 {$IFDEF POSIX}
   PWCharT = PUCS4Char;
@@ -980,76 +982,142 @@ type
     exitcode: Integer;
   end;
 
- PPyWideStringList = ^PyWideStringList;
- PyWideStringList = {$IFDEF CPUX86}packed{$ENDIF} record
-   length: Py_ssize_t;
-   items: PPWCharT;
- end;
+  PPyWideStringList = ^PyWideStringList;
+  PyWideStringList = {$IFDEF CPUX86}packed{$ENDIF} record
+    length: Py_ssize_t;
+    items: PPWCharT;
+  end;
 
- PPyConfig = ^PyConfig;
- PyConfig = record
-   // The definition of PyConfig has been changing in every python version
-   // So we make this structure opaque and we access its fields through
-   // the ConfigOffsets below
-   Filler: array [0..1000] of Byte;
- end;
-
-{$SCOPEDENUMS ON}
-  TConfigFields = (
-    use_environment,
-    parse_argv,
-    argv,
-    site_import,
-    interactive,
-    optimization_level,
-    parser_debug,
-    verbose,
-    pathconfig_warnings,
-    program_name,
-    home,
-    module_search_paths_set,
-    module_search_paths,
-    executable);
-{$SCOPEDENUMS OFF}
-
-  TConfigOffsets = array [8..13] of array [TConfigFields] of Integer;
-
-  // The followng needs updating when new versions are added
-  const
-    ConfigOffests: TConfigOffsets =
+  PyPreConfig = {$IFDEF CPUX86}packed{$ENDIF} record
+  public type
+    TAllocator = (
+      PYMEM_ALLOCATOR_NOT_SET = Integer(0),
+      PYMEM_ALLOCATOR_DEFAULT = Integer(1),
+      PYMEM_ALLOCATOR_DEBUG = Integer(2),
+      PYMEM_ALLOCATOR_MALLOC = Integer(3),
+      PYMEM_ALLOCATOR_MALLOC_DEBUG = Integer(4),
+      PYMEM_ALLOCATOR_PYMALLOC = Integer(5),
+      PYMEM_ALLOCATOR_PYMALLOC_DEBUG = Integer(6));
+  public
+    _config_init: integer;
+    parse_argv: integer;
+    isolated: integer;
+    use_environment: integer;
+    configure_locale: integer;
+    coerce_c_locale: integer;
+    coerce_c_locale_warn: integer;
     {$IFDEF MSWINDOWS}
-      {$IFDEF CPU64BITS}
-      ((8, 80, 88, 144, 156, 160, 164, 172, 224, 104, 240, 248, 256, 272),
-       (8, 80, 88, 144, 156, 160, 164, 172, 224, 104, 240, 248, 256, 272),
-       (8, 80, 104, 152, 168, 172, 176, 184, 232, 240, 256, 272, 280, 296),
-       (8, 96, 120, 168, 184, 188, 192, 200, 264, 272, 288, 304, 312, 336),
-       (8, 96, 120, 168, 184, 188, 192, 200, 268, 272, 288, 304, 312, 336),
-       (8, 96, 120, 168, 184, 188, 192, 200, 272, 280, 296, 312, 320, 344));
-      {$ELSE}
-      ((8, 68, 72, 100, 112, 116, 120, 128, 164, 80, 172, 176, 180, 188),
-       (8, 68, 72, 100, 112, 116, 120, 128, 164, 80, 172, 176, 180, 188),
-       (8, 64, 76, 100, 116, 120, 124, 132, 168, 172, 180, 188, 192, 200),
-       (8, 72, 84, 108, 124, 128, 132, 140, 184, 188, 196, 204, 208, 220),
-       (8, 76, 88, 112, 128, 132, 136, 144, 192, 196, 204, 212, 216, 228),
-       (8, 76, 88, 112, 128, 132, 136, 144, 196, 200, 208, 216, 220, 232));
-      {$ENDIF}
-    {$ELSE}
-      {$IFDEF CPU64BITS}
-      ((8, 88, 96, 152, 164, 168, 172, 180, 224, 112, 240, 248, 256, 272),
-       (8, 88, 96, 152, 164, 168, 172, 180, 224, 112, 240, 248, 256, 272),
-       (8, 80, 104, 152, 168, 172, 176, 184, 232, 240, 256, 272, 280, 296),
-       (8, 96, 120, 168, 184, 188, 192, 200, 256, 264, 280, 296, 304, 328),
-       (8, 104, 128, 176, 192, 196, 200, 208, 268, 272, 288, 304, 312, 336),
-       (8, 104, 128, 176, 192, 196, 200, 208, 272, 280, 296, 312, 320, 344));
-      {$ELSE}
-      ((8, 68, 72, 100, 112, 116, 120, 128, 160, 80, 168, 172, 176, 184),
-       (8, 68, 72, 100, 112, 116, 120, 128, 160, 80, 168, 172, 176, 184),
-       (8, 64, 76, 100, 116, 120, 124, 132, 164, 168, 176, 184, 188, 196),
-       (8, 72, 84, 108, 124, 128, 132, 140, 180, 184, 192, 200, 204, 216),
-       (8, 76, 88, 112, 128, 132, 136, 144, 188, 192, 200, 208, 212, 224),
-       (8, 76, 88, 112, 128, 132, 136, 144, 192, 196, 204, 212, 216, 228));
-      {$ENDIF}
-    {$ENDIF}
+    legacy_windows_fs_encoding: integer;
+    {$ENDIF MSWINDOWS}
+    utf8_mode: integer;
+    dev_mode: integer;
+    allocator: TAllocator; //Evaluates to a 4-Bytes integer
+  end;
+
+  // https://github.com/python/cpython/blob/3.8/Include/cpython/initconfig.h#L129
+  // https://github.com/python/cpython/blob/3.9/Include/cpython/initconfig.h#L133
+  // https://github.com/python/cpython/blob/3.10/Include/cpython/initconfig.h#L133
+  // https://github.com/python/cpython/blob/3.11/Include/cpython/initconfig.h#L133
+  // https://github.com/python/cpython/blob/3.12/Include/cpython/initconfig.h#L134
+  // https://github.com/python/cpython/blob/3.13/Include/cpython/initconfig.h#L133
+
+  PPyConfig = ^PyConfig;
+  PyConfig = {$IFDEF CPUX86}packed{$ENDIF} record
+  private
+    _container: array[0..599] of byte;
+  public const
+    CHECK_HASH_PYCS_MODE_ALWAYS = 'always';
+    CHECK_HASH_PYCS_MODE_NEVER = 'never';
+    CHECK_HASH_PYCS_MODE_DEFAULT = 'default';
+  public
+    _config_init: PInteger;
+    isolated: PInteger;
+    use_environment: PInteger;
+    dev_mode: PInteger;
+    install_signal_handlers: PInteger;
+    use_hash_seed: PInteger;
+    hash_seed: PC_LONG;
+    faulthandler: PInteger;
+    _use_peg_parser: PInteger;
+    tracemalloc: PInteger;
+    perf_profiling: PInteger;
+    import_time: PInteger;
+    code_debug_ranges: PInteger;
+    show_ref_count: PInteger;
+    show_alloc_count: PInteger;
+    dump_refs: PInteger;
+    dump_refs_file: PPWCharT;
+    malloc_stats: PInteger;
+    filesystem_encoding: PPWCharT;
+    filesystem_errors: PPWCharT;
+    pycache_prefix: PPWCharT;
+    parse_argv: PInteger;
+    orig_argv: PPyWideStringList;
+    argv: PPyWideStringList;
+    program_name: PPWCharT;
+    xoptions: PPyWideStringList;
+    warnoptions: PPyWideStringList;
+    site_import: PInteger;
+    bytes_warning: PInteger;
+    warn_default_encoding: PInteger;
+    inspect: PInteger;
+    interactive: PInteger;
+    optimization_level: PInteger;
+    parser_debug: PInteger;
+    write_bytecode: PInteger;
+    verbose: PInteger;
+    quiet: PInteger;
+    user_site_directory: PInteger;
+    configure_c_stdio: PInteger;
+    beffered_stdio: PInteger;
+    stdio_encoding: PPWCharT;
+    stdio_errors: PPWCharT;
+    {$IFDEF MSWINDOWS}
+    legacy_windows_stdio: PInteger;
+    {$ENDIF MSWINDOWS}
+    check_hash_pycs_mode: PPWCharT;
+    use_frozen_modules: PInteger;
+    safe_path: PInteger;
+    int_max_str_digits: PInteger;
+    cpu_count: PInteger;
+    enable_gil: PInteger;
+    pathconfig_warnings: PInteger;
+    program_name_1: PPWCharT;
+    pythonpath_env: PPWCharT;
+    home: PPWCharT;
+    platlibdir_1: PPWCharT;
+    module_search_paths_set: PInteger;
+    module_search_paths: PPyWideStringList;
+    stdlib_dir: PPWCharT;
+    executable: PPWCharT;
+    base_executable: PPWCharT;
+    prefix: PPWCharT;
+    base_prefix: PPWCharT;
+    exec_prefix: PPWCharT;
+    base_exec_prefix: PPWCharT;
+    platlibdir: PPWCharT;
+    skip_source_first_line: PInteger;
+    run_command: PPWCharT;
+    run_module: PPWCharT;
+    run_filename: PPWCharT;
+    sys_path_0: PPWCharT;
+    _install_importlib: PInteger;
+    _init_main: PInteger;
+    _isolated_interpreter: PInteger;
+    _orig_argv: PPyWideStringList;
+    _is_python_build: PInteger;
+    _pystats: PInteger;
+    run_presite: PPWCharT;
+  public
+    constructor Create(const AMinVersion: integer;
+      const APyGILEnabled: boolean = true;
+      const APyStatEnabled: boolean = false;
+      const APyDebugEnabled: boolean = false);
+
+    procedure Patch(const AMinVersion: integer;
+      const APyGILEnabled, APyStatEnabled, APyDebugEnabled: boolean);
+  end;
+
 
 //#######################################################
 //##                                                   ##
@@ -1821,13 +1889,17 @@ type
     // Initialization functions
     PyWideStringList_Append         : function(list: PPyWideStringList; item: PWCharT): PyStatus; cdecl;
     PyWideStringList_Insert         : function(list: PPyWideStringList; index: Py_ssize_t; item: PWCharT): PyStatus; cdecl;
+    PyPreConfig_InitPythonConfig    : procedure(var preconfig: PyPreConfig); cdecl;
+    PyPreConfig_InitIsolatedConfig  : procedure(var preconfig: PyPreConfig); cdecl;
     PyConfig_InitPythonConfig       : procedure(var config: PyConfig); cdecl;
     PyConfig_InitIsolatedConfig     : procedure(var config: PyConfig); cdecl;
     PyConfig_Clear                  : procedure(var config: PyConfig); cdecl;
     PyConfig_SetString              : function(var config: PyConfig; config_str: PPWCharT; str: PWCharT): PyStatus; cdecl;
+    PyConfig_SetBytesString         : function(var config: PyConfig; config_str: PPWCharT; const str: PWCharT): PyStatus; cdecl;
     PyConfig_Read                   : function(var config: PyConfig): PyStatus; cdecl;
     PyConfig_SetArgv                : function(var config: PyConfig; argc: Py_ssize_t; argv: PPWCharT): PyStatus; cdecl;
     PyConfig_SetWideStringList      : function(var config: PyConfig; list: PPyWideStringList; length: Py_ssize_t; items: PPWCharT): PyStatus; cdecl;
+    Py_PreInitialize                : function({$IFDEF FPC}constref{$ELSE}[Ref] const{$ENDIF} preconfig: PyPreConfig): PyStatus; cdecl;
     Py_InitializeFromConfig         : function({$IFDEF FPC}constref{$ELSE}[Ref] const{$ENDIF} config: PyConfig): PyStatus; cdecl;
 
   function Py_CompileString(str,filename:PAnsiChar;start:integer) : PPyObject; cdecl;
@@ -1934,16 +2006,19 @@ end;
 //--------------------------------------------------------
 type
   TDatetimeConversionMode = (dcmToTuple, dcmToDatetime);
+  TPythonFlag = (pfDebug, pfInteractive, pfNoSite, pfOptimize, pfVerbose,
+                 pfFrozenFlag, pfIgnoreEnvironmentFlag,
+                 pfDontWriteBytecodeFlag, pfIsolated);
+  TPythonFlags = set of TPythonFlag;
+
 const
   DEFAULT_DATETIME_CONVERSION_MODE = dcmToTuple;
+  DEFAULT_FLAGS = {$IFDEF IOS}[pfIsolated, pfDontWriteBytecodeFlag]{$ELSE}[]{$ENDIF IOS};
+
 type
   TEngineClient = class;
   TSysPathInitEvent = procedure(Sender: TObject; PathList: PPyObject) of object;
   TConfigInitEvent = procedure(Sender: TObject; var Config: PyConfig) of object;
-  TPythonFlag = (pfDebug, pfInteractive, pfNoSite, pfOptimize, pfVerbose,
-                 pfFrozenFlag, pfIgnoreEnvironmentFlag, pfIsolated);
-  TPythonFlags = set of TPythonFlag;
-
 
   TTracebackItem = class
   public
@@ -2137,7 +2212,7 @@ type
     property DatetimeConversionMode: TDatetimeConversionMode read FDatetimeConversionMode write FDatetimeConversionMode default DEFAULT_DATETIME_CONVERSION_MODE;
     property InitScript: TStrings read FInitScript write SetInitScript;
     property IO: TPythonInputOutput read FIO write SetIO;
-    property PyFlags: TPythonFlags read FPyFlags write SetPyFlags default [];
+    property PyFlags: TPythonFlags read FPyFlags write SetPyFlags default DEFAULT_FLAGS;
     property RedirectIO: Boolean read FRedirectIO write FRedirectIO default True;
     property UseWindowsConsole: Boolean read FUseWindowsConsole write FUseWindowsConsole default False;
     property OnAfterInit: TNotifyEvent read FOnAfterInit write FOnAfterInit;
@@ -4089,16 +4164,20 @@ begin
   PyGILState_Ensure        := Import('PyGILState_Ensure');
   PyGILState_Release       := Import('PyGILState_Release');
 
-  PyWideStringList_Append     := Import('PyWideStringList_Append');
-  PyWideStringList_Insert     := Import('PyWideStringList_Insert');
-  PyConfig_InitPythonConfig   := Import('PyConfig_InitPythonConfig');
-  PyConfig_InitIsolatedConfig := Import('PyConfig_InitIsolatedConfig');
-  PyConfig_Clear              := Import('PyConfig_Clear');
-  PyConfig_SetString          := Import('PyConfig_SetString');
-  PyConfig_Read               := Import('PyConfig_Read');
-  PyConfig_SetArgv            := Import('PyConfig_SetArgv');
-  PyConfig_SetWideStringList  := Import('PyConfig_SetWideStringList');
-  Py_InitializeFromConfig     := Import('Py_InitializeFromConfig');
+  PyWideStringList_Append        := Import('PyWideStringList_Append');
+  PyWideStringList_Insert        := Import('PyWideStringList_Insert');
+  PyPreConfig_InitPythonConfig   := Import('PyPreConfig_InitPythonConfig');
+  PyPreConfig_InitIsolatedConfig := Import('PyPreConfig_InitIsolatedConfig');
+  PyConfig_InitPythonConfig      := Import('PyConfig_InitPythonConfig');
+  PyConfig_InitIsolatedConfig    := Import('PyConfig_InitIsolatedConfig');
+  PyConfig_Clear                 := Import('PyConfig_Clear');
+  PyConfig_SetString             := Import('PyConfig_SetString');
+  PyConfig_SetBytesString        := Import('PyConfig_SetBytesString');
+  PyConfig_Read                  := Import('PyConfig_Read');
+  PyConfig_SetArgv               := Import('PyConfig_SetArgv');
+  PyConfig_SetWideStringList     := Import('PyConfig_SetWideStringList');
+  Py_PreInitialize               := Import('Py_PreInitialize');
+  Py_InitializeFromConfig        := Import('Py_InitializeFromConfig');
 end;
 
 function TPythonInterface.Py_CompileString(str,filename:PAnsiChar;start:integer):PPyObject;
@@ -4517,7 +4596,7 @@ begin
   FAutoFinalize            := True;
   FTraceback               := TPythonTraceback.Create;
   FUseWindowsConsole       := False;
-  FPyFlags                 := [];
+  FPyFlags                 := DEFAULT_FLAGS;
   FDatetimeConversionMode  := DEFAULT_DATETIME_CONVERSION_MODE;
   if csDesigning in ComponentState then
     begin
@@ -4631,20 +4710,14 @@ end;
 
 procedure TPythonEngine.AssignPyFlags(var Config: PyConfig);
 begin
-  PInteger(PByte(@Config) + ConfigOffests[MinorVersion, TConfigFields.parser_debug])^ :=
-    IfThen(pfDebug in FPyFlags, 1, 0);
-  PInteger(PByte(@Config) + ConfigOffests[MinorVersion, TConfigFields.verbose])^ :=
-    IfThen(pfVerbose in FPyFlags, 1, 0);
-  PInteger(PByte(@Config) + ConfigOffests[MinorVersion, TConfigFields.interactive])^ :=
-    IfThen(pfInteractive in FPyFlags, 1, 0);
-  PInteger(PByte(@Config) + ConfigOffests[MinorVersion, TConfigFields.optimization_level])^ :=
-    IfThen(pfOptimize in FPyFlags, 1, 0);
-  PInteger(PByte(@Config) + ConfigOffests[MinorVersion, TConfigFields.site_import])^ :=
-    IfThen(pfNoSite in FPyFlags, 0, 1);
-  PInteger(PByte(@Config) + ConfigOffests[MinorVersion, TConfigFields.pathconfig_warnings])^ :=
-    IfThen(pfFrozenFlag in FPyFlags, 1, 0);
-  PInteger(PByte(@Config) + ConfigOffests[MinorVersion, TConfigFields.use_environment])^ :=
-    IfThen(pfIgnoreEnvironmentFlag in FPyFlags, 0, 1);
+  Config.parser_debug^ := IfThen(pfDebug in FPyFlags, 1, 0);
+  Config.verbose^ := IfThen(pfVerbose in FPyFlags, 1, 0);
+  Config.interactive^ := IfThen(pfInteractive in FPyFlags, 1, 0);
+  Config.optimization_level^ := IfThen(pfOptimize in FPyFlags, 1, 0);
+  Config.site_import^ := IfThen(pfNoSite in FPyFlags, 0, 1);
+  Config.pathconfig_warnings^ := IfThen(pfFrozenFlag in FPyFlags, 1, 0);
+  Config.use_environment^ := IfThen(pfIgnoreEnvironmentFlag in FPyFlags, 0, 1);
+  Config.write_bytecode^ := IfThen(pfDontWriteBytecodeFlag in FPyFlags, 0, 1);
 end;
 
 procedure TPythonEngine.Initialize;
@@ -4662,23 +4735,21 @@ procedure TPythonEngine.Initialize;
   var
     Paths: TArray<string>;
     I: Integer;
-    PWSL: PPyWideStringList;
   begin
     if FPythonPath = '' then Exit;
 
-    PWSL := PPyWideStringList(PByte(@Config) + ConfigOffests[MinorVersion,
-      TConfigFields.module_search_paths]);
     Paths := string(FPythonPath).Split([PathSep]);
     for I := 0 to Length(Paths) - 1 do
     begin
       if (Paths[I] = '') and (I > 0) then
         Continue;
-      PyWideStringList_Append(PWSL, PWCharT(StringToWCharTString(Paths[I])));
+      PyWideStringList_Append(
+        Config.module_search_paths,
+        PWCharT(StringToWCharTString(Paths[I])));
     end;
 
-    if PWSL^.length > 0 then
-      PInteger(PByte(@Config) + ConfigOffests[MinorVersion,
-        TConfigFields.module_search_paths_set])^ := 1;
+    if Config.module_search_paths^.length > 0 then
+      Config.module_search_paths_set^ := 1;
   end;
 
   function GetVal(AModule : PPyObject; AVarName : AnsiString) : PPyObject;
@@ -4730,6 +4801,7 @@ procedure TPythonEngine.Initialize;
 
 var
   i : Integer;
+  PreConfig: PyPreConfig;
   Config: PyConfig;
   Status: PyStatus;
   ErrMsg: string;
@@ -4744,43 +4816,53 @@ begin
     FInitialized := True
   else
   begin
-    // Fills Config with zeros and then sets some default values
+    // Initialize PreConfig to behave as regular Python
     if pfIsolated in FPyFlags then
-      PyConfig_InitIsolatedConfig(Config)
+      PyPreConfig_InitIsolatedConfig(PreConfig)
     else
-      PyConfig_InitPythonConfig(Config);
-    try
-      AssignPyFlags(Config);
+      PyPreConfig_InitPythonConfig(PreConfig);
 
-      // Set programname and pythonhome if available
-      if FProgramName <> '' then
-        PyConfig_SetString(Config,
-          PPWcharT(PByte(@Config) + ConfigOffests[MinorVersion, TConfigFields.program_name]),
-          PWCharT(StringToWCharTString(FProgramName)));
-      if FPythonHome <> '' then
-        PyConfig_SetString(Config,
-          PPWcharT(PByte(@Config) + ConfigOffests[MinorVersion, TConfigFields.home]),
-          PWCharT(StringToWCharTString(FPythonHome)));
-      // Set venv executable if available
-      if FVenvPythonExe <> '' then
-        PyConfig_SetString(Config,
-          PPWcharT(PByte(@Config) + ConfigOffests[MinorVersion, TConfigFields.executable]),
-          PWCharT(StringToWCharTString(FVenvPythonExe)));
+    Status := Py_PreInitialize(PreConfig);
+    if not PyStatus_Exception(Status) then begin
+      // Fills Config with zeros and then sets some default values
+      Config := PyConfig.Create(MinorVersion);
+      if pfIsolated in FPyFlags then
+        PyConfig_InitIsolatedConfig(Config)
+      else
+        PyConfig_InitPythonConfig(Config);
+      try
+        AssignPyFlags(Config);
 
-      // Set program arguments (sys.argv)
-      SetProgramArgs(Config);
+        // Set programname and pythonhome if available
+        if FProgramName <> '' then
+          PyConfig_SetString(Config,
+            Config.program_name,
+            PWCharT(StringToWCharTString(FProgramName)));
+        if FPythonHome <> '' then
+          PyConfig_SetString(Config,
+            Config.home,
+            PWCharT(StringToWCharTString(FPythonHome)));
+        // Set venv executable if available
+        if FVenvPythonExe <> '' then
+          PyConfig_SetString(Config,
+            Config.executable,
+            PWCharT(StringToWCharTString(FVenvPythonExe)));
 
-      // PythonPath
-      SetPythonPath(Config);
+        // Set program arguments (sys.argv)
+        SetProgramArgs(Config);
 
-      // Fine tune Config
-      if Assigned(FOnConfigInit) then
-        FOnConfigInit(Self, Config);
+        // PythonPath
+        SetPythonPath(Config);
 
-      Status := Py_InitializeFromConfig(Config);
-      FInitialized := Py_IsInitialized() <> 0
-    finally
-      PyConfig_Clear(Config);
+        // Fine tune Config
+        if Assigned(FOnConfigInit) then
+          FOnConfigInit(Self, Config);
+
+        Status := Py_InitializeFromConfig(Config);
+        FInitialized := Py_IsInitialized() <> 0
+      finally
+        PyConfig_Clear(Config);
+      end;
     end;
 
     if not FInitialized then
@@ -4871,7 +4953,7 @@ var
 
 begin
   // do not parse further
-  PInteger(PByte(@Config) + ConfigOffests[MinorVersion, TConfigFields.parse_argv])^ := 0;
+  Config.parse_argv^ := 0;
   for I := 0 to ParamCount do
   begin
     {
@@ -4889,7 +4971,7 @@ begin
     Str := TempS;
     {$ENDIF}
     PyWideStringList_Append(
-      PPyWideStringList(PByte(@Config) + ConfigOffests[MinorVersion, TConfigFields.argv]),
+      Config.argv,
       PWCharT(Str));
    end;
 end;
@@ -9830,8 +9912,6 @@ begin
   Result := TPyEngineAndGIL.Create
 end;
 
-
-
 {$IFNDEF FPC}
 
 { TAnonymousPythonThread }
@@ -9903,5 +9983,193 @@ end;
 
 {$ENDIF FPC}
 
-end.
+{ PyConfig }
 
+constructor PyConfig.Create(const AMinVersion: integer;
+  const APyGILEnabled, APyStatEnabled, APyDebugEnabled: boolean);
+begin
+  Patch(AMinVersion, APyGILEnabled, APyStatEnabled, APyDebugEnabled);
+end;
+
+procedure PyConfig.Patch(const AMinVersion: integer;
+  const APyGILEnabled, APyStatEnabled, APyDebugEnabled: boolean);
+type
+  TDataType = (dtChar = 0, dtShort = 2, dtInt = 4, dtLong = 8, dtPointer = 8);
+
+  function MakeSlot(var ASlot: pointer; const ASize: byte; ADataType: TDataType): pointer;
+  begin
+    {
+      Data Type |	Size in Bytes |	Self-Alignment
+           char	        1	        None (any address is fine)
+          short	        2	        The address has to be a multiple of 2
+            int	        4	        The address has to be a multiple of 4
+           long	        8	        The address has to be a multiple of 8
+        Pointer         8	        The address has to be a multiple of 8
+    }
+
+    {$IFDEF CPU64BITS}
+    while (NativeUInt(ASlot) mod Byte(ADataType)) <> 0 do
+      Inc(PByte(ASlot));
+    {$ENDIF CPU64BITS}
+
+    Result := ASlot;
+    PNativeUInt(ASlot) := Pointer(NativeUInt(ASlot) + ASize);
+  end;
+
+begin
+  var LSlot: pointer := @_container[0];
+  FillChar(_container, SizeOf(_container), 0);
+
+  _config_init := MakeSlot(LSlot, SizeOf(integer), dtInt);
+  isolated := MakeSlot(LSlot, SizeOf(integer), dtInt);
+  use_environment := MakeSlot(LSlot, SizeOf(integer), dtInt);
+  dev_mode := MakeSlot(LSlot, SizeOf(integer), dtInt);
+  install_signal_handlers := MakeSlot(LSlot, SizeOf(integer), dtInt);
+  use_hash_seed := MakeSlot(LSlot, SizeOf(integer), dtInt);
+  hash_seed := MakeSlot(LSlot, SizeOf(C_LONG), dtInt);
+  faulthandler := MakeSlot(LSlot, SizeOf(integer), dtInt);
+
+  if (AMinVersion = 9) then
+    _use_peg_parser := MakeSlot(LSlot, SizeOf(integer), dtInt);
+
+  tracemalloc := MakeSlot(LSlot, SizeOf(integer), dtInt);
+
+  if (AMinVersion >= 12) then
+    perf_profiling := MakeSlot(LSlot, SizeOf(integer), dtInt);
+
+  import_time := MakeSlot(LSlot, SizeOf(integer), dtInt);
+
+  if (AMinVersion >= 11) then
+    code_debug_ranges := MakeSlot(LSlot, SizeOf(integer), dtInt);
+
+  show_ref_count := MakeSlot(LSlot, SizeOf(integer), dtInt);
+
+  if (AMinVersion = 8) then
+    show_alloc_count := MakeSlot(LSlot, SizeOf(integer), dtInt);
+
+  dump_refs := MakeSlot(LSlot, SizeOf(integer), dtInt);
+
+  if (AMinVersion >= 11) then
+    dump_refs_file := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
+
+  malloc_stats := MakeSlot(LSlot, SizeOf(integer), dtInt);
+  filesystem_encoding := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
+  filesystem_errors := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
+  pycache_prefix := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
+  parse_argv := MakeSlot(LSlot, SizeOf(integer), dtInt);
+
+  if (AMinVersion >= 10) then
+    orig_argv := MakeSlot(LSlot, SizeOf(PyWideStringList), dtPointer);
+
+  argv := MakeSlot(LSlot, SizeOf(PyWideStringList), dtPointer);
+
+  if (AMinVersion <= 9) then
+    program_name := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
+
+  xoptions := MakeSlot(LSlot, SizeOf(PyWideStringList), dtPointer);
+  warnoptions := MakeSlot(LSlot, SizeOf(PyWideStringList), dtPointer);
+  site_import := MakeSlot(LSlot, SizeOf(integer), dtInt);
+  bytes_warning := MakeSlot(LSlot, SizeOf(integer), dtInt);
+
+  if (AMinVersion >= 10) then
+    warn_default_encoding := MakeSlot(LSlot, SizeOf(integer), dtInt);
+
+  inspect := MakeSlot(LSlot, SizeOf(integer), dtInt);
+  interactive := MakeSlot(LSlot, SizeOf(integer), dtInt);
+  optimization_level := MakeSlot(LSlot, SizeOf(integer), dtInt);
+  parser_debug := MakeSlot(LSlot, SizeOf(integer), dtInt);
+  write_bytecode := MakeSlot(LSlot, SizeOf(integer), dtInt);
+  verbose := MakeSlot(LSlot, SizeOf(integer), dtInt);
+  quiet := MakeSlot(LSlot, SizeOf(integer), dtInt);
+  user_site_directory := MakeSlot(LSlot, SizeOf(integer), dtInt);
+  configure_c_stdio := MakeSlot(LSlot, SizeOf(integer), dtInt);
+  beffered_stdio := MakeSlot(LSlot, SizeOf(integer), dtInt);
+  stdio_encoding := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
+  stdio_errors := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
+
+  {$IFDEF MSWINDOWS}
+  legacy_windows_stdio := MakeSlot(LSlot, SizeOf(integer), dtInt);
+  {$ENDIF MSWINDOWS}
+
+  check_hash_pycs_mode := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
+
+  if (AMinVersion >= 11) then
+    use_frozen_modules := MakeSlot(LSlot, SizeOf(integer), dtInt);
+
+  if (AMinVersion >= 11) then
+    safe_path := MakeSlot(LSlot, SizeOf(integer), dtInt);
+
+  if (AMinVersion >= 12) then
+    int_max_str_digits := MakeSlot(LSlot, SizeOf(integer), dtInt);
+
+  if (AMinVersion >= 13) then
+    cpu_count := MakeSlot(LSlot, SizeOf(integer), dtInt);
+
+  if (AMinVersion >= 13) and APyGILEnabled then
+    enable_gil := MakeSlot(LSlot, SizeOf(integer), dtInt);
+
+  pathconfig_warnings := MakeSlot(LSlot, SizeOf(integer), dtInt);
+
+  if (AMinVersion >= 10) then
+    program_name_1 := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
+
+  pythonpath_env := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
+  home := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
+
+  if (AMinVersion >= 10) then
+    platlibdir_1 := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
+
+  module_search_paths_set := MakeSlot(LSlot, SizeOf(integer), dtInt);
+  module_search_paths := MakeSlot(LSlot, SizeOf(PyWideStringList), dtPointer);
+
+  if (AMinVersion >= 11) then
+    stdlib_dir := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
+
+  executable := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
+  base_executable := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
+  prefix := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
+  base_prefix := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
+  exec_prefix := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
+  base_exec_prefix := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
+
+  if (AMinVersion = 9) then
+    platlibdir := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
+
+  skip_source_first_line := MakeSlot(LSlot, SizeOf(integer), dtInt);
+  run_command := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
+  run_module := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
+  run_filename := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
+
+  if (AMinVersion >= 13) then
+    sys_path_0 := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
+
+  _install_importlib := MakeSlot(LSlot, SizeOf(integer), dtInt);
+  _init_main := MakeSlot(LSlot, SizeOf(integer), dtInt);
+
+  if (AMinVersion >= 9) then
+    _isolated_interpreter := MakeSlot(LSlot, SizeOf(integer), dtInt);
+
+  if (AMinVersion = 9) then
+    _orig_argv := MakeSlot(LSlot, SizeOf(PyWideStringList), dtPointer);
+
+  if (AMinVersion >= 11) then
+    _is_python_build := MakeSlot(LSlot, SizeOf(integer), dtInt);
+
+  if (AMinVersion >= 13) and APyStatEnabled then
+    _pystats := MakeSlot(LSlot, SizeOf(integer), dtInt);
+
+  if (AMinVersion >= 13) and APyDebugEnabled then
+    run_presite := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
+
+  // Redirects
+  if (AMinVersion >= 10) then begin
+    program_name := program_name_1;
+    platlibdir := platlibdir_1;
+  end;
+
+  Assert(
+    (NativeUInt(LSlot) - NativeUInt(@Self)) <= SizeOf(_container),
+    'Insufficient memory.');
+end;
+
+end.
