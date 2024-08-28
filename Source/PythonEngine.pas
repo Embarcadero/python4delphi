@@ -2019,6 +2019,7 @@ type
   TEngineClient = class;
   TSysPathInitEvent = procedure(Sender: TObject; PathList: PPyObject) of object;
   TConfigInitEvent = procedure(Sender: TObject; var Config: PyConfig) of object;
+  TPreConfigInitEvent = procedure(Sender: TObject; var PreConfig: PyPreConfig) of object;
 
   TTracebackItem = class
   public
@@ -2067,6 +2068,7 @@ type
     FPythonPath:                 UnicodeString;
     FOnSysPathInit:              TSysPathInitEvent;
     FOnConfigInit:               TConfigInitEvent;
+    FOnPreConfigInit:            TPreConfigInitEvent;
     FTraceback:                  TPythonTraceback;
     FUseWindowsConsole:          Boolean;
     FGlobalVars:                 PPyObject;
@@ -2217,8 +2219,8 @@ type
     property UseWindowsConsole: Boolean read FUseWindowsConsole write FUseWindowsConsole default False;
     property OnAfterInit: TNotifyEvent read FOnAfterInit write FOnAfterInit;
     property OnSysPathInit: TSysPathInitEvent read FOnSysPathInit write FOnSysPathInit;
+    property OnPreConfigInit: TPreConfigInitEvent read FOnPreConfigInit write FOnPreConfigInit;
     property OnConfigInit: TConfigInitEvent read FOnConfigInit write FOnConfigInit;
-
   end;
 
 
@@ -4821,6 +4823,10 @@ begin
       PyPreConfig_InitIsolatedConfig(PreConfig)
     else
       PyPreConfig_InitPythonConfig(PreConfig);
+
+    // Fine tune PreConfig
+    if Assigned(FOnPreConfigInit) then
+      FOnPreConfigInit(Self, PreConfig);
 
     Status := Py_PreInitialize(PreConfig);
     if not PyStatus_Exception(Status) then begin
