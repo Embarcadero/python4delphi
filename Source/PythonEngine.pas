@@ -2118,10 +2118,8 @@ type
     function   Run_CommandAsString(const command: AnsiString; mode: Integer; const FileName: string = '<string>'): string;
     function   Run_CommandAsObject(const command: AnsiString; mode: Integer; const FileName: string = '<string>'): PPyObject;
     function   Run_CommandAsObjectWithDict(const command: AnsiString; mode: Integer; locals, globals: PPyObject; const FileName: string = '<string>'): PPyObject;
-    function   EncodeString (const str: UnicodeString): AnsiString; {$IFDEF FPC}overload;{$ENDIF}
-    {$IFDEF FPC}
-    function   EncodeString (const str: AnsiString): AnsiString; overload;
-    {$ENDIF}
+    function   EncodeString(const str: UnicodeString): AnsiString; overload;
+    function   EncodeString(const str: AnsiString): AnsiString; overload;
     function   EncodeWindowsFilePath(const str: string): AnsiString;
     procedure  ExecString(const command: AnsiString; const FileName: string = '<string>'); overload;
     procedure  ExecStrings(strings: TStrings; const FileName: string = '<string>'); overload;
@@ -2498,8 +2496,8 @@ type
     destructor Destroy; override;
     procedure Assign(Source: TPersistent); override;
     procedure BuildError( const ModuleName : AnsiString );
-    procedure RaiseError( const msg : AnsiString );
-    procedure RaiseErrorObj( const msg : AnsiString; obj : PPyObject );
+    procedure RaiseError(const msg : AnsiString);
+    procedure RaiseErrorObj(const msg : AnsiString; obj : PPyObject);
     function  Owner : TErrors;
     property Error : PPyObject read FError write FError;
   published
@@ -3098,9 +3096,8 @@ function CleanString(const s : UnicodeString; AppendLF : Boolean = True) : Unico
 implementation
 
 uses
-{$IFDEF FPC}
   StrUtils,
-{$ELSE}
+{$IFNDEF FPC}
   AnsiStrings,
 {$ENDIF}
 {$IFDEF MSWINDOWS}
@@ -5627,17 +5624,15 @@ begin
         end;
 end;
 
-function TPythonEngine.EncodeString(const str: UnicodeString): AnsiString; {$IFDEF FPC}overload;{$ENDIF}
+function TPythonEngine.EncodeString(const str: UnicodeString): AnsiString;
 begin
-  Result := UTF8Encode(str)
+  Result := UTF8Encode(str);
 end;
 
-{$IFDEF FPC}
-function TPythonEngine.EncodeString (const str: AnsiString): AnsiString; overload;
+function TPythonEngine.EncodeString(const str: AnsiString): AnsiString;
 begin
-  Result := str;
+  Result := UTF8Encode(str);
 end;
-{$ENDIF}
 
 function TPythonEngine.EncodeWindowsFilePath(const str: string): AnsiString;
 {PEP 529}
@@ -7276,14 +7271,14 @@ begin
     raise Exception.CreateFmt( 'Could not create error "%s"', [Name] );
 end;
 
-procedure TError.RaiseError( const msg : AnsiString );
+procedure TError.RaiseError(const msg : AnsiString);
 begin
   Owner.Owner.CheckEngine;
   with Owner.Owner.Engine do
-    PyErr_SetString( Error, PAnsiChar(msg) );
+    PyErr_SetString(Error, PAnsiChar(EncodeString(msg)));
 end;
 
-procedure TError.RaiseErrorObj( const msg : AnsiString; obj : PPyObject );
+procedure TError.RaiseErrorObj(const msg : AnsiString; obj : PPyObject);
 var
   args, res, str : PPyObject;
   i : Integer;
@@ -7327,10 +7322,11 @@ begin
           end
         else
           raise Exception.Create('TError.RaiseErrorObj: I didn''t get an instance' );
-        PyErr_SetObject( Error, res );
+        PyErr_SetObject(Error, res);
+        Py_XDECREF(res);
       end
     else
-      PyErr_SetObject( Error, obj );
+      PyErr_SetObject(Error, obj);
 end;
 
 function  TError.Owner : TErrors;
@@ -7790,8 +7786,8 @@ begin
   with GetPythonEngine do
     begin
       Result := -1;
-      PyErr_SetString (PyExc_AttributeError^,
-        PAnsiChar(AnsiString(Format('Unknown attribute "%s"',[key]))));
+      PyErr_SetString(PyExc_AttributeError^,
+        PAnsiChar(EncodeString(Format('Unknown attribute "%s"',[key]))));
     end;
 end;
 
@@ -7828,7 +7824,7 @@ function TPyObject.GetBuffer(view: PPy_buffer; flags: Integer): Integer;
 begin
   view^.obj := nil;
   with GetPythonEngine do
-    PyErr_SetObject(PyExc_BufferError^, PyUnicodeFromString(''));
+    PyErr_SetString(PyExc_BufferError^, '');
   Result := -1;
 end;
 
