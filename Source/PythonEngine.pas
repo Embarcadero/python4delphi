@@ -10010,8 +10010,9 @@ type
     }
 
     {$IFDEF CPU64BITS}
-    while (NativeUInt(ASlot) mod Byte(ADataType)) <> 0 do
-      Inc(PByte(ASlot));
+    if Byte(ADataType) > 0 then
+      while (NativeUInt(ASlot) mod Byte(ADataType)) <> 0 do
+        Inc(PByte(ASlot));
     {$ENDIF CPU64BITS}
 
     Result := ASlot;
