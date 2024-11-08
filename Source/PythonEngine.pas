@@ -9995,11 +9995,16 @@ end;
 
 procedure PyConfig.Patch(const AMinVersion: integer;
   const APyGILEnabled, APyStatEnabled, APyDebugEnabled: boolean);
-type
-  TDataType = (dtChar = 0, dtShort = 2, dtInt = 4, dtLong = 8, dtPointer = 8);
 
-  function MakeSlot(var ASlot: pointer; const ASize: byte; ADataType: TDataType): pointer;
+  function MakeAddr(var AAddr: pointer; const AMemberSize: byte): pointer; overload;
+  {$IFDEF CPU64BITS}
+  var
+    LAlign: NativeUInt;
+    LOffset: NativeUInt;
+    LPadding: byte;
+  {$ENDIF CPU64BITS}
   begin
+    {$IFDEF CPU64BITS}
     {
       Data Type |	Size in Bytes |	Self-Alignment
            char	        1	        None (any address is fine)
@@ -10009,159 +10014,180 @@ type
         Pointer         8	        The address has to be a multiple of 8
     }
 
-    {$IFDEF CPU64BITS}
-    while (NativeUInt(ASlot) mod Byte(ADataType)) <> 0 do
-      Inc(PByte(ASlot));
+    // Formula: padding = align - (current offset mod align) mod align
+
+    Assert(AMemberSize <= 8, 'Structure members must be handled individually.');
+
+    LAlign := AMemberSize;
+    LOffset := NativeUInt(AAddr) - NativeUInt(@_container[0]);
+    LPadding := (LAlign - (LOffset mod LAlign)) mod LAlign;
+
+    PNativeUInt(AAddr) := Pointer(NativeUInt(AAddr) + LPadding);
     {$ENDIF CPU64BITS}
 
-    Result := ASlot;
-    PNativeUInt(ASlot) := Pointer(NativeUInt(ASlot) + ASize);
+    Result := AAddr;
+    PNativeUInt(AAddr) := Pointer(NativeUInt(AAddr) + AMemberSize);
   end;
 
+  function MakeAddr(var AAddr: pointer; const AStructMembersSizes: TArray<byte>): pointer; overload;
+  begin
+    Assert(Length(AStructMembersSizes) > 0, 'Invalid argument "AStructMembersSizes".');
+
+    Result := MakeAddr(AAddr, AStructMembersSizes[0]);
+    for var I := Low(AStructMembersSizes) + 1 to High(AStructMembersSizes) do
+      MakeAddr(AAddr, AStructMembersSizes[0]);
+  end;
+
+var
+  LAddr: pointer;
+const
+  PyWideStringListMembersSizes: TArray<byte> = [
+    SizeOf(Py_ssize_t),
+    SizeOf(PPWCharT)];
 begin
-  var LSlot: pointer := @_container[0];
+  LAddr := @_container[0];
   FillChar(_container, SizeOf(_container), 0);
 
-  _config_init := MakeSlot(LSlot, SizeOf(integer), dtInt);
-  isolated := MakeSlot(LSlot, SizeOf(integer), dtInt);
-  use_environment := MakeSlot(LSlot, SizeOf(integer), dtInt);
-  dev_mode := MakeSlot(LSlot, SizeOf(integer), dtInt);
-  install_signal_handlers := MakeSlot(LSlot, SizeOf(integer), dtInt);
-  use_hash_seed := MakeSlot(LSlot, SizeOf(integer), dtInt);
-  hash_seed := MakeSlot(LSlot, SizeOf(C_LONG), dtInt);
-  faulthandler := MakeSlot(LSlot, SizeOf(integer), dtInt);
+  _config_init := MakeAddr(LAddr, SizeOf(integer));
+  isolated := MakeAddr(LAddr, SizeOf(integer));
+  use_environment := MakeAddr(LAddr, SizeOf(integer));
+  dev_mode := MakeAddr(LAddr, SizeOf(integer));
+  install_signal_handlers := MakeAddr(LAddr, SizeOf(integer));
+  use_hash_seed := MakeAddr(LAddr, SizeOf(integer));
+  hash_seed := MakeAddr(LAddr, SizeOf(C_LONG));
+  faulthandler := MakeAddr(LAddr, SizeOf(integer));
 
   if (AMinVersion = 9) then
-    _use_peg_parser := MakeSlot(LSlot, SizeOf(integer), dtInt);
+    _use_peg_parser := MakeAddr(LAddr, SizeOf(integer));
 
-  tracemalloc := MakeSlot(LSlot, SizeOf(integer), dtInt);
+  tracemalloc := MakeAddr(LAddr, SizeOf(integer));
 
   if (AMinVersion >= 12) then
-    perf_profiling := MakeSlot(LSlot, SizeOf(integer), dtInt);
+    perf_profiling := MakeAddr(LAddr, SizeOf(integer));
 
-  import_time := MakeSlot(LSlot, SizeOf(integer), dtInt);
+  import_time := MakeAddr(LAddr, SizeOf(integer));
 
   if (AMinVersion >= 11) then
-    code_debug_ranges := MakeSlot(LSlot, SizeOf(integer), dtInt);
+    code_debug_ranges := MakeAddr(LAddr, SizeOf(integer));
 
-  show_ref_count := MakeSlot(LSlot, SizeOf(integer), dtInt);
+  show_ref_count := MakeAddr(LAddr, SizeOf(integer));
 
   if (AMinVersion = 8) then
-    show_alloc_count := MakeSlot(LSlot, SizeOf(integer), dtInt);
+    show_alloc_count := MakeAddr(LAddr, SizeOf(integer));
 
-  dump_refs := MakeSlot(LSlot, SizeOf(integer), dtInt);
+  dump_refs := MakeAddr(LAddr, SizeOf(integer));
 
   if (AMinVersion >= 11) then
-    dump_refs_file := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
+    dump_refs_file := MakeAddr(LAddr, SizeOf(PWCharT));
 
-  malloc_stats := MakeSlot(LSlot, SizeOf(integer), dtInt);
-  filesystem_encoding := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
-  filesystem_errors := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
-  pycache_prefix := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
-  parse_argv := MakeSlot(LSlot, SizeOf(integer), dtInt);
+  malloc_stats := MakeAddr(LAddr, SizeOf(integer));
+  filesystem_encoding := MakeAddr(LAddr, SizeOf(PWCharT));
+  filesystem_errors := MakeAddr(LAddr, SizeOf(PWCharT));
+  pycache_prefix := MakeAddr(LAddr, SizeOf(PWCharT));
+  parse_argv := MakeAddr(LAddr, SizeOf(integer));
 
   if (AMinVersion >= 10) then
-    orig_argv := MakeSlot(LSlot, SizeOf(PyWideStringList), dtPointer);
+    orig_argv := MakeAddr(LAddr, PyWideStringListMembersSizes);
 
-  argv := MakeSlot(LSlot, SizeOf(PyWideStringList), dtPointer);
+  argv := MakeAddr(LAddr, PyWideStringListMembersSizes);
 
   if (AMinVersion <= 9) then
-    program_name := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
+    program_name := MakeAddr(LAddr, SizeOf(PWCharT));
 
-  xoptions := MakeSlot(LSlot, SizeOf(PyWideStringList), dtPointer);
-  warnoptions := MakeSlot(LSlot, SizeOf(PyWideStringList), dtPointer);
-  site_import := MakeSlot(LSlot, SizeOf(integer), dtInt);
-  bytes_warning := MakeSlot(LSlot, SizeOf(integer), dtInt);
+  xoptions := MakeAddr(LAddr, PyWideStringListMembersSizes);
+  warnoptions := MakeAddr(LAddr, PyWideStringListMembersSizes);
+  site_import := MakeAddr(LAddr, SizeOf(integer));
+  bytes_warning := MakeAddr(LAddr, SizeOf(integer));
 
   if (AMinVersion >= 10) then
-    warn_default_encoding := MakeSlot(LSlot, SizeOf(integer), dtInt);
+    warn_default_encoding := MakeAddr(LAddr, SizeOf(integer));
 
-  inspect := MakeSlot(LSlot, SizeOf(integer), dtInt);
-  interactive := MakeSlot(LSlot, SizeOf(integer), dtInt);
-  optimization_level := MakeSlot(LSlot, SizeOf(integer), dtInt);
-  parser_debug := MakeSlot(LSlot, SizeOf(integer), dtInt);
-  write_bytecode := MakeSlot(LSlot, SizeOf(integer), dtInt);
-  verbose := MakeSlot(LSlot, SizeOf(integer), dtInt);
-  quiet := MakeSlot(LSlot, SizeOf(integer), dtInt);
-  user_site_directory := MakeSlot(LSlot, SizeOf(integer), dtInt);
-  configure_c_stdio := MakeSlot(LSlot, SizeOf(integer), dtInt);
-  beffered_stdio := MakeSlot(LSlot, SizeOf(integer), dtInt);
-  stdio_encoding := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
-  stdio_errors := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
+  inspect := MakeAddr(LAddr, SizeOf(integer));
+  interactive := MakeAddr(LAddr, SizeOf(integer));
+  optimization_level := MakeAddr(LAddr, SizeOf(integer));
+  parser_debug := MakeAddr(LAddr, SizeOf(integer));
+  write_bytecode := MakeAddr(LAddr, SizeOf(integer));
+  verbose := MakeAddr(LAddr, SizeOf(integer));
+  quiet := MakeAddr(LAddr, SizeOf(integer));
+  user_site_directory := MakeAddr(LAddr, SizeOf(integer));
+  configure_c_stdio := MakeAddr(LAddr, SizeOf(integer));
+  beffered_stdio := MakeAddr(LAddr, SizeOf(integer));
+  stdio_encoding := MakeAddr(LAddr, SizeOf(PWCharT));
+  stdio_errors := MakeAddr(LAddr, SizeOf(PWCharT));
 
   {$IFDEF MSWINDOWS}
-  legacy_windows_stdio := MakeSlot(LSlot, SizeOf(integer), dtInt);
+  legacy_windows_stdio := MakeAddr(LAddr, SizeOf(integer));
   {$ENDIF MSWINDOWS}
 
-  check_hash_pycs_mode := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
+  check_hash_pycs_mode := MakeAddr(LAddr, SizeOf(PWCharT));
 
   if (AMinVersion >= 11) then
-    use_frozen_modules := MakeSlot(LSlot, SizeOf(integer), dtInt);
+    use_frozen_modules := MakeAddr(LAddr, SizeOf(integer));
 
   if (AMinVersion >= 11) then
-    safe_path := MakeSlot(LSlot, SizeOf(integer), dtInt);
+    safe_path := MakeAddr(LAddr, SizeOf(integer));
 
   if (AMinVersion >= 12) then
-    int_max_str_digits := MakeSlot(LSlot, SizeOf(integer), dtInt);
+    int_max_str_digits := MakeAddr(LAddr, SizeOf(integer));
 
   if (AMinVersion >= 13) then
-    cpu_count := MakeSlot(LSlot, SizeOf(integer), dtInt);
+    cpu_count := MakeAddr(LAddr, SizeOf(integer));
 
   if (AMinVersion >= 13) and APyGILEnabled then
-    enable_gil := MakeSlot(LSlot, SizeOf(integer), dtInt);
+    enable_gil := MakeAddr(LAddr, SizeOf(integer));
 
-  pathconfig_warnings := MakeSlot(LSlot, SizeOf(integer), dtInt);
-
-  if (AMinVersion >= 10) then
-    program_name_1 := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
-
-  pythonpath_env := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
-  home := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
+  pathconfig_warnings := MakeAddr(LAddr, SizeOf(integer));
 
   if (AMinVersion >= 10) then
-    platlibdir_1 := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
+    program_name_1 := MakeAddr(LAddr, SizeOf(PWCharT));
 
-  module_search_paths_set := MakeSlot(LSlot, SizeOf(integer), dtInt);
-  module_search_paths := MakeSlot(LSlot, SizeOf(PyWideStringList), dtPointer);
+  pythonpath_env := MakeAddr(LAddr, SizeOf(PWCharT));
+  home := MakeAddr(LAddr, SizeOf(PWCharT));
+
+  if (AMinVersion >= 10) then
+    platlibdir_1 := MakeAddr(LAddr, SizeOf(PWCharT));
+
+  module_search_paths_set := MakeAddr(LAddr, SizeOf(integer));
+  module_search_paths := MakeAddr(LAddr, PyWideStringListMembersSizes);
 
   if (AMinVersion >= 11) then
-    stdlib_dir := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
+    stdlib_dir := MakeAddr(LAddr, SizeOf(PWCharT));
 
-  executable := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
-  base_executable := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
-  prefix := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
-  base_prefix := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
-  exec_prefix := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
-  base_exec_prefix := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
+  executable := MakeAddr(LAddr, SizeOf(PWCharT));
+  base_executable := MakeAddr(LAddr, SizeOf(PWCharT));
+  prefix := MakeAddr(LAddr, SizeOf(PWCharT));
+  base_prefix := MakeAddr(LAddr, SizeOf(PWCharT));
+  exec_prefix := MakeAddr(LAddr, SizeOf(PWCharT));
+  base_exec_prefix := MakeAddr(LAddr, SizeOf(PWCharT));
 
   if (AMinVersion = 9) then
-    platlibdir := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
+    platlibdir := MakeAddr(LAddr, SizeOf(PWCharT));
 
-  skip_source_first_line := MakeSlot(LSlot, SizeOf(integer), dtInt);
-  run_command := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
-  run_module := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
-  run_filename := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
+  skip_source_first_line := MakeAddr(LAddr, SizeOf(integer));
+  run_command := MakeAddr(LAddr, SizeOf(PWCharT));
+  run_module := MakeAddr(LAddr, SizeOf(PWCharT));
+  run_filename := MakeAddr(LAddr, SizeOf(PWCharT));
 
   if (AMinVersion >= 13) then
-    sys_path_0 := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
+    sys_path_0 := MakeAddr(LAddr, SizeOf(PWCharT));
 
-  _install_importlib := MakeSlot(LSlot, SizeOf(integer), dtInt);
-  _init_main := MakeSlot(LSlot, SizeOf(integer), dtInt);
+  _install_importlib := MakeAddr(LAddr, SizeOf(integer));
+  _init_main := MakeAddr(LAddr, SizeOf(integer));
 
   if (AMinVersion >= 9) then
-    _isolated_interpreter := MakeSlot(LSlot, SizeOf(integer), dtInt);
+    _isolated_interpreter := MakeAddr(LAddr, SizeOf(integer));
 
   if (AMinVersion = 9) then
-    _orig_argv := MakeSlot(LSlot, SizeOf(PyWideStringList), dtPointer);
+    _orig_argv := MakeAddr(LAddr, PyWideStringListMembersSizes);
 
   if (AMinVersion >= 11) then
-    _is_python_build := MakeSlot(LSlot, SizeOf(integer), dtInt);
+    _is_python_build := MakeAddr(LAddr, SizeOf(integer));
 
   if (AMinVersion >= 13) and APyStatEnabled then
-    _pystats := MakeSlot(LSlot, SizeOf(integer), dtInt);
+    _pystats := MakeAddr(LAddr, SizeOf(integer));
 
   if (AMinVersion >= 13) and APyDebugEnabled then
-    run_presite := MakeSlot(LSlot, SizeOf(PWCharT), dtPointer);
+    run_presite := MakeAddr(LAddr, SizeOf(PWCharT));
 
   // Redirects
   if (AMinVersion >= 10) then begin
@@ -10170,7 +10196,7 @@ begin
   end;
 
   Assert(
-    (NativeUInt(LSlot) - NativeUInt(@Self)) <= SizeOf(_container),
+    (NativeUInt(LAddr) - NativeUInt(@Self)) <= SizeOf(_container),
     'Insufficient memory.');
 end;
 
