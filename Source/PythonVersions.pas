@@ -35,7 +35,7 @@ type
     function GetDisplayName: string;
     function GetApiVersion: integer;
     function GetSysArchitecture: string;
-    function GetPythonExecutable: string;
+    function GetPythonExecutable(Index: Integer): string;
   public
     IsRegistered: Boolean;
     IsAllUsers: Boolean;
@@ -48,7 +48,8 @@ type
     function Is_virtualenv: Boolean;
     function Is_conda: Boolean;
     procedure AssignTo(PythonEngine: TPersistent);
-    property PythonExecutable: string read GetPythonExecutable;
+    property PythonExecutable: string index 0 read GetPythonExecutable;
+    property PythonFreeThreadedExecutable: string index 1 read GetPythonExecutable;
     property DLLName: string read GetDLLName;
     property SysArchitecture: string read GetSysArchitecture;
     property IsPython3K: Boolean read GetIsPython3K;
@@ -131,7 +132,7 @@ begin
     TPythonEngine(PythonEngine).DllPath := DLLPath;
     TPythonEngine(PythonEngine).APIVersion := ApiVersion;
     if Is_venv then begin
-      TPythonEngine(PythonEngine).VenvPythonExe := PythonExecutable;
+      TPythonEngine(PythonEngine).PythonExecutable := PythonExecutable;
       TPythonEngine(PythonEngine).SetPythonHome(DLLPath);
     end else
       {
@@ -208,11 +209,18 @@ begin
   end;
 end;
 
-function TPythonVersion.GetPythonExecutable: string;
+function TPythonVersion.GetPythonExecutable(Index: Integer): string;
+var
+  ExeName: string;
 begin
-  Result := IncludeTrailingPathDelimiter(InstallPath) + 'python.exe';
+  if Index = 0 then
+    ExeName := 'python.exe'
+  else
+    ExeName := Format('python%st.exe', [SysVersion]);
+
+  Result := IncludeTrailingPathDelimiter(InstallPath) + ExeName;
   if not FileExists(Result) then begin
-    Result := IncludeTrailingPathDelimiter(InstallPath) +  'Scripts' + PathDelim + 'python.exe';
+    Result := IncludeTrailingPathDelimiter(InstallPath) +  'Scripts' + PathDelim + ExeName;
     if not FileExists(Result) then Result := '';
   end;
 end;
