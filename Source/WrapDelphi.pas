@@ -1003,7 +1003,7 @@ Type
 
 implementation
 
-Uses
+uses
   Math,
   StrUtils,
   RTLConsts,
@@ -1042,7 +1042,7 @@ resourcestring
   rs_ExpectedNil = 'In static methods Self should be nil';
   rs_ExpectedInterface = 'Expected a Pascal interface';
   rs_ExpectedSequence = 'Expected a python sequence';
-  rsExpectedPPyObject = 'Expected a PPyObject';
+  rsExpectedPointer = 'Expected a Pointer';
   rs_InvalidClass = 'Invalid class';
   rs_ErrEventNotReg = 'No Registered EventHandler for events of type "%s';
   rs_ErrEventNoSuport = 'Class %s does not support events because it must '+
@@ -2188,12 +2188,16 @@ begin
   end;
 end;
 
-function ValidatePPyObject(PyValue: PPyObject; const RttiType: TRttiType;
+function ValidatePointer(PyValue: PPyObject; const RttiType: TRttiType;
   out ParamValue: TValue; out ErrMsg: string): Boolean;
 var
   RefType: TRttiType;
+  PyEngine: TPythonEngine;
+  P: Pointer;
 begin
   Result := False;
+  PyEngine := GetPythonEngine;
+
   if (RTTIType is TRttiPointerType) then
   begin
     RefType := TRttiPointerType(RTTIType).ReferredType;
@@ -2201,10 +2205,21 @@ begin
     begin
       Result := True;
       ParamValue := TValue.From<PPyObject>(PyValue);
+    end
+    else if PyEngine.PyLong_Check(PyValue) then
+    begin
+      P := PyEngine.PyLong_AsVoidPtr(PyValue);
+      if PyEngine.PyErr_Occurred = nil then
+      begin
+        Result := True;
+        ParamValue := TValue.From<Pointer>(P);
+      end
+      else
+        PyEngine.PyErr_Clear;
     end;
   end;
   if not Result then
-    ErrMsg := rsExpectedPPyObject;
+    ErrMsg := rsExpectedPointer;
 end;
 
 function PyObjectToTValue(PyArg: PPyObject; ArgType: TRttiType;
@@ -2238,7 +2253,7 @@ begin
     tkDynArray:
       Result := ValidateDynArray(PyArg, ArgType, Arg, ErrMsg);
     tkPointer:
-      Result := ValidatePPyObject(PyArg, ArgType, Arg, ErrMsg);
+      Result := ValidatePointer(PyArg, ArgType, Arg, ErrMsg);
   else
     Result := SimplePythonToValue(PyArg, ArgType.Handle, Arg, ErrMsg);
   end;
@@ -2277,7 +2292,7 @@ function TValueToPyObject(const Value: TValue;
    DelphiWrapper: TPyDelphiWrapper; out ErrMsg: string): PPyObject;
 begin
   if Value.IsEmpty then
-    Result := GetPythonEngine.ReturnNone
+    Result := DelphiWrapper.Engine.ReturnNone
   else
     case Value.Kind of
       tkClass: Result := DelphiWrapper.Wrap(Value.AsObject);
@@ -2288,13 +2303,10 @@ begin
       tkArray, tkDynArray:
         Result := DynArrayToPython(Value, DelphiWrapper, ErrMsg);
       tkPointer:
-        if Value.IsType<PPyObject> then
+        if Value.TypeInfo = TypeInfo(PPyObject) then
           Result := Value.AsType<PPyObject>
         else
-        begin
-          Result := nil;
-          ErrMsg := rs_ErrValueToPython;
-        end;
+          Result := DelphiWrapper.Engine.PyLong_FromVoidPtr(Value.AsType<Pointer>);
     else
       Result := SimpleValueToPython(Value, ErrMsg);
     end;
@@ -2624,11 +2636,13 @@ begin
 end;
 {$ENDIF}
 
+{$HINTS OFF}
 function Abort_Wrapper(pself, args: PPyObject): PPyObject; cdecl;
 begin
   Result := nil;
   Abort;
 end;
+{$HINTS ON}
 
 Type
   //  Used for class registration by TPyDelphiWrapper fClassRegister
@@ -5407,12 +5421,11 @@ begin
     with TPythonType(fHelperClassRegister.Objects[i]) do
       if not Initialized then Initialize;
   // Initialize module
-  if Assigned(FModule) then begin
+  if Assigned(FModule) then
+  begin
+    CreateModuleFunctions;
     if Module.Initialized then
-    begin
-      CreateModuleFunctions;
-      CreateModuleVars;
-    end
+      CreateModuleVars
     else
       Module.AddClient( Self );
   end;
@@ -5421,7 +5434,6 @@ end;
 procedure TPyDelphiWrapper.ModuleReady(Sender : TObject);
 begin
   inherited;
-  CreateModuleFunctions;
   CreateModuleVars;
 end;
 
@@ -5530,13 +5542,13 @@ begin
         TPythonType(fHelperClassRegister.Objects[i]).Module := Value;
     if Assigned(FModule) then
       if Initialized and (ComponentState * [csDesigning, csLoading] = []) then
+      begin
+        CreateModuleFunctions;
         if FModule.Initialized then
-        begin
-          CreateModuleFunctions;
-          CreateModuleVars;
-        end
+          CreateModuleVars
         else
           FModule.AddClient(Self);
+      end;
   end;
 end;
 
